@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Python-Interpreter im Browser</title>
+    <!-- 1. Tailwind CSS für das Styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 2. Pyodide (Python für WebAssembly) -->
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+
+    <style>
+        /* Sorgen für ein ansprechendes Dark-Theme */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Styling für den Scrollbar im Output-Bereich */
+        #output-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        #output-container::-webkit-scrollbar-track {
+            background: #1f2937; /* gray-800 */
+        }
+        #output-container::-webkit-scrollbar-thumb {
+            background: #4b5563; /* gray-600 */
+            border-radius: 4px;
+        }
+        #output-container::-webkit-scrollbar-thumb:hover {
+            background: #6b7280; /* gray-500 */
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 flex flex-col h-screen">
+
+    <!-- Header wurde entfernt -->
+
+    <!-- Ladeanzeige -->
+    <div id="loading" class="flex-grow flex flex-col justify-center items-center">
+        <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-400"></div>
+        <p id="loading-status" class="mt-4 text-lg text-gray-300">Pyodide (Python-Laufzeitumgebung) wird initialisiert...</p>
+    </div>
+
+    <!-- Hauptanwendung (zunächst ausgeblendet) -->
+    <!-- m-4 (Margin) entfernt und p-4 (Padding) hinzugefügt, explizite Höhe entfernt -->
+    <main id="app-container" class="flex-grow flex flex-col md:flex-row p-4 gap-4" style="display: none;">
+
+        <!-- Linke Spalte: Editor und Steuerung -->
+        <div class="flex flex-col md:w-1/2 h-full">
+            <label for="code-editor" class="text-sm font-medium text-gray-300 mb-2">Python Code-Editor</label>
+            <textarea id="code-editor"
+                class="flex-grow bg-gray-800 border border-gray-700 rounded-lg p-4 font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Geben Sie Ihren Python-Code hier ein...
+Shift+Enter für eine neue Zeile.
+Enter zum Ausführen.
+
+# Testen Sie z.B.:
+# arr = np.array([1, 2, 3])
+# print(arr * 2)
+"></textarea>
+            <button id="run-btn"
+                class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-200 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
+                Code ausführen (Enter)
+            </button>
+        </div>
+
+        <!-- Rechte Spalte: Ausgabe/Konsole -->
+        <div class="flex flex-col md:w-1/2 h-full">
+            <label for="output-container" class="text-sm font-medium text-gray-300 mb-2">Ausgabe (REPL)</label>
+            <div id="output-container" class="flex-grow bg-gray-800 border border-gray-700 rounded-lg p-4 font-mono text-sm overflow-y-auto h-full">
+                <pre id="output" class="whitespace-pre-wrap break-words"></pre>
+            </div>
+        </div>
+
+    </main>
+
+    <script typeF="module">
+        // DOM-Elemente abrufen
+        const codeEditor = document.getElementById('code-editor');
+        const runButton = document.getElementById('run-btn');
+        const outputElement = document.getElementById('output');
+        const loadingIndicator = document.getElementById('loading');
+        const loadingStatus = document.getElementById('loading-status');
+        const appContainer = document.getElementById('app-container');
+
+        let pyodide; // Globale Variable für die Pyodide-Instanz
+
+        // Funktion zum Hinzufügen von Text zur Ausgabe und automatischem Scrollen
+        function addToOutput(text, type = 'stdout') {
+            if (type === 'stderr') {
+                outputElement.innerHTML += `<span class="text-red-400">${text}</span>`;
+            } else if (type === 'repr') {
+                 outputElement.innerHTML += `<span class="text-gray-400">${text}</span>`;
+            } else {
+                outputElement.textContent += text;
+            }
+            // Zum Ende scrollen
+            outputElement.parentElement.scrollTop = outputElement.parentElement.scrollHeight;
+        }
+
+        async function main() {
+            try {
+                // 1. Pyodide initialisieren
+                // stdout/stderr werden umgeleitet, um sie im Ausgabefenster anzuzeigen
+                pyodide = await loadPyodide({
+                    stdout: (text) => addToOutput(text, 'stdout'),
+                    stderr: (text) => addToOutput(text, 'stderr')
+                });
+
+                loadingStatus.textContent = 'Python-Laufzeitumgebung geladen. Lade Pakete...';
+
+                // 2. Gewünschte Pakete laden
+                // Pyodide lädt diese aus dem Web.
+                const packages = ['numpy', 'pandas', 'networkx'];
+                loadingStatus.textContent = `Lade: ${packages.join(', ')}... (Dies kann einen Moment dauern)`;
+                await pyodide.loadPackage(packages);
+
+                loadingStatus.textContent = 'Pakete geladen. Importiere Aliase...';
+
+                // 3. Pakete im globalen Geltungsbereich von Python importieren (als Aliase)
+                await pyodide.runPythonAsync(`
+                    import pandas as pd
+                    import numpy as np
+                    import networkx as nx
+                    import io
+                    import sys
+
+                    # Willkommensnachricht
+                    print("Pyodide initialisiert.")
+                    print(f"Python-Version: {sys.version.split(' ')[0]}")
+                    print("Verfügbare Bibliotheken: pandas (pd), numpy (np), networkx (nx)")
+                    print("--------------------------------------------------")
+                `);
+
+                // 4. Ladeanzeige ausblenden und App anzeigen
+                loadingIndicator.style.display = 'none';
+                appContainer.style.display = 'flex';
+                addToOutput('>>> '); // REPL-Prompt anzeigen
+                codeEditor.focus();
+
+                // 5. Event-Listener für den "Run"-Button
+                runButton.addEventListener('click', executePythonCode);
+
+                // 6. Event-Listener für 'Enter'-Taste im Editor
+                codeEditor.addEventListener('keydown', (e) => {
+                    // Code ausführen, wenn 'Enter' gedrückt wird (und nicht Shift+Enter)
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault(); // Verhindert Zeilenumbruch
+                        executePythonCode();
+                    }
+                });
+
+            } catch (err) {
+                loadingStatus.textContent = 'Fehler beim Initialisieren von Pyodide.';
+                addToOutput(`[Startup Error] ${err.message}`, 'stderr');
+            }
+        }
+
+        // Funktion zum Ausführen des Python-Codes
+        async function executePythonCode() {
+            const code = codeEditor.value;
+            if (!code.trim()) {
+                addToOutput('\n>>> ');
+                return;
+            }
+
+            // Code zur Ausgabe hinzufügen (simuliert das REPL-Verhalten)
+            addToOutput(code + '\n', 'stdin');
+            
+            // Button deaktivieren während der Ausführung
+            runButton.disabled = true;
+            runButton.textContent = 'Wird ausgeführt...';
+
+            try {
+                // Führe den Code asynchron aus
+                // 'runPythonAsync' kann Top-Level 'await' im Python-Code verarbeiten
+                let result = await pyodide.runPythonAsync(code);
+
+                // Wenn das Ergebnis (letzter Ausdruck) nicht 'None' ist, drucke seine Repräsentation
+                if (result !== undefined) {
+                    // Hole die 'repr'-Funktion von Python
+                    let repr = pyodide.globals.get('repr');
+                    addToOutput(repr(result) + '\n', 'repr');
+                }
+            } catch (err) {
+                // Python-Fehler abfangen und anzeigen
+                addToOutput(`${err.message}\n`, 'stderr');
+            } finally {
+                // Editor leeren
+                codeEditor.value = '';
+                // REPL-Prompt für die nächste Eingabe anzeigen
+                addToOutput('>>> ');
+                
+                // Button wieder aktivieren
+                runButton.disabled = false;
+                runButton.textContent = 'Code ausführen (Enter)';
+                codeEditor.focus();
+            }
+        }
+
+        // Anwendung starten
+        main();
+    </script>
+</body>
+</html>
+
+
