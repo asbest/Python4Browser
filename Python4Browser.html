@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Python-Interpreter im Browser</title>
+    <!-- 1. Tailwind CSS für das Styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 2. Pyodide (Python für WebAssembly) -->
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Styling für den Scrollbar im Konsolen-Output */
+        #console-output::-webkit-scrollbar {
+            width: 8px;
+        }
+        #console-output::-webkit-scrollbar-track {
+            background: #1f2937; /* gray-800 */
+        }
+        #console-output::-webkit-scrollbar-thumb {
+            background: #4b5563; /* gray-600 */
+            border-radius: 4px;
+        }
+        #console-output::-webkit-scrollbar-thumb:hover {
+            background: #6b7280; /* gray-500 */
+        }
+        
+        /* Sorgt dafür, dass die Textarea-Höhe korrekt an den Inhalt angepasst wird */
+        #console-input {
+            overflow-y: hidden;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 flex flex-col h-screen">
+
+    <!-- Ladeanzeige -->
+    <div id="loading" class="flex-grow flex flex-col justify-center items-center">
+        <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-400"></div>
+        <p id="loading-status" class="mt-4 text-lg text-gray-300">Pyodide (Python-Laufzeitumgebung) wird initialisiert...</p>
+    </div>
+
+    <!-- Hauptanwendung (zunächst ausgeblendet) -->
+    <main id="app-container" class="flex-grow flex flex-col p-4 overflow-hidden" style="display: none;">
+    
+        <!-- Die Konsole selbst (Verlauf) -->
+        <div id="console-output" class="flex-grow overflow-y-auto font-mono text-sm whitespace-pre-wrap break-words">
+            <!-- Verlauf wird hier dynamisch eingefügt -->
+        </div>
+
+        <!-- Eingabezeile am Boden -->
+        <div id="input-area" class="flex w-full mt-2 font-mono text-sm items-start">
+            <span id="prompt" class="text-blue-400 flex-shrink-0">>>>&nbsp;</span>
+            <!-- \u00A0 ist ein geschütztes Leerzeichen -->
+            <textarea id="console-input" 
+                      rows="1" 
+                      class="flex-grow bg-transparent text-gray-100 focus:outline-none resize-none ml-2"
+                      placeholder="Python-Code eingeben... (Shift+Enter für Zeilenumbruch)"
+                      autofocus
+                      spellcheck="false"></textarea>
+        </div>
+
+    </main>
+
+    <script type="module">
+        // DOM-Elemente
+        const loadingIndicator = document.getElementById('loading');
+        const loadingStatus = document.getElementById('loading-status');
+        const appContainer = document.getElementById('app-container');
+        const consoleOutput = document.getElementById('console-output');
+        const promptElement = document.getElementById('prompt');
+        const inputElement = document.getElementById('console-input');
+
+        let pyodide;
+        let codeBuffer = ""; // Für mehrzeilige Eingaben
+
+        // Funktion zum automatischen Anpassen der Textarea-Höhe
+        function autoGrow(element) {
+            element.style.height = 'auto'; // Zurücksetzen
+            element.style.height = (element.scrollHeight) + 'px'; // Auf Scroll-Höhe setzen
+        }
+        
+        inputElement.addEventListener('input', () => autoGrow(inputElement));
+
+        // Funktion zum Hinzufügen von Einträgen zum Konsolenverlauf
+        function addToOutput(text, type = 'stdout') {
+            const line = document.createElement('div');
+            
+            // Zeilenumbrüche am Ende entfernen, da 'div' bereits ein Block-Element ist
+            line.textContent = text.trimEnd(); 
+
+            switch (type) {
+                case 'stdin':
+                    line.className = 'text-blue-300'; // Benutzereingabe
+                    break;
+                case 'stderr':
+                    line.className = 'text-red-400'; // Fehlermeldung
+                    break;
+                case 'repr':
+                    line.className = 'text-gray-400'; // Ergebnis-Repräsentation
+                    break;
+                case 'stdout':
+                default:
+                    line.className = 'text-gray-100'; // Standard-Ausgabe (print)
+                    break;
+            }
+            consoleOutput.appendChild(line);
+            
+            // Immer ans Ende des Verlaufs scrollen
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+
+        // Hauptfunktion zur Initialisierung von Pyodide
+        async function main() {
+            try {
+                // 1. Pyodide initialisieren und stdout/stderr umleiten
+                pyodide = await loadPyodide({
+                    stdout: (text) => addToOutput(text, 'stdout'),
+                    stderr: (text) => addToOutput(text, 'stderr')
+                });
+
+                loadingStatus.textContent = 'Python-Laufzeitumgebung geladen. Lade Pakete...';
+
+                // 2. Pakete laden
+                const packages = ['numpy', 'pandas', 'networkx'];
+                loadingStatus.textContent = `Lade: ${packages.join(', ')}... (Dies kann einen Moment dauern)`;
+                await pyodide.loadPackage(packages);
+
+                loadingStatus.textContent = 'Pakete geladen. Importiere Aliase...';
+
+                // 3. Pakete importieren und Willkommensnachricht
+                // Wir fangen die Ausgabe der Python-Willkommensnachricht ab
+                let initOutput = "";
+                await pyodide.runPythonAsync(`
+                    import pandas as pd
+                    import numpy as np
+                    import networkx as nx
+                    import io
+                    import sys
+
+                    print("Pyodide initialisiert.")
+                    print(f"Python-Version: {sys.version.split(' ')[0]}")
+                    print("Verfügbare Bibliotheken: pandas (pd), numpy (np), networkx (nx)")
+                    print("--------------------------------------------------")
+                `);
+
+                // 4. Ladeanzeige ausblenden und App anzeigen
+                loadingIndicator.style.display = 'none';
+                appContainer.style.display = 'flex';
+                inputElement.focus();
+
+                // 5. Event-Listener für Tastatureingaben
+                inputElement.addEventListener('keydown', onKeydown);
+
+            } catch (err) {
+                loadingStatus.textContent = 'Fehler beim Initialisieren von Pyodide.';
+                addToOutput(`[Startup Error] ${err.message}`, 'stderr');
+            }
+        }
+
+        // Event-Handler für Tastendrücke in der Eingabe
+        async function onKeydown(e) {
+            // Code ausführen, wenn 'Enter' gedrückt wird (und nicht Shift+Enter)
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault(); // Verhindert Standard-Zeilenumbruch
+
+                const code = inputElement.value;
+                inputElement.value = ''; // Eingabefeld leeren
+                autoGrow(inputElement); // Höhe zurücksetzen
+                
+                // Echo der Eingabe in den Verlauf
+                addToOutput(promptElement.textContent + code, 'stdin');
+
+                // Wenn der Benutzer nur Enter drückt, ohne Code...
+                if (code.trim() === '' && codeBuffer === '') {
+                    consoleOutput.scrollTop = consoleOutput.scrollHeight;
+                    inputElement.focus();
+                    return;
+                }
+
+                // Code-Puffer verarbeiten
+                await processCode(code);
+            }
+        }
+
+        // Funktion zur Verarbeitung des eingegebenen Codes
+        async function processCode(line) {
+            codeBuffer += line + "\n"; // Zeile zum Puffer hinzufügen
+            
+            inputElement.disabled = true; // Eingabe sperren während der Ausführung
+
+            try {
+                // Versuche, den gesamten Puffer auszuführen
+                let result = await pyodide.runPythonAsync(codeBuffer);
+                
+                // Wenn erfolgreich, war der Code vollständig
+                if (result !== undefined) {
+                    addToOutput(pyodide.globals.get('repr')(result), 'repr');
+                }
+                
+                codeBuffer = ""; // Puffer zurücksetzen
+                promptElement.textContent = ">>>\u00A0"; // Prompt zurücksetzen
+
+            } catch (err) {
+                const errMsg = err.message;
+                // Prüfen, ob der Fehler ein Hinweis auf einen unvollständigen Block ist
+                if (errMsg.includes("EOF") || 
+                    errMsg.includes("IndentationError: expected an indented block") ||
+                    errMsg.includes("SyntaxError: incomplete input")) 
+                {
+                    // Code ist unvollständig, auf nächste Zeile warten
+                    promptElement.textContent = "... \u00A0";
+                } else {
+                    // Echter Fehler (wurde bereits durch stderr-Redirect ausgegeben)
+                    codeBuffer = ""; // Puffer zurücksetzen
+                    promptElement.textContent = ">>>\u00A0"; // Prompt zurücksetzen
+                }
+            } finally {
+                inputElement.disabled = false; // Eingabe freigeben
+                inputElement.focus();
+                // Sicherstellen, dass ans Ende gescrollt wird
+                consoleOutput.scrollTop = consoleOutput.scrollHeight;
+            }
+        }
+
+        // Anwendung starten
+        main();
+    </script>
+</body>
+</html>
+
+
