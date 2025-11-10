@@ -50,11 +50,18 @@
         <div id="file-sidebar" class="w-1/4 bg-gray-800 p-4 flex flex-col border-r border-gray-700">
             <h2 class="text-lg font-semibold text-white mb-3">Dateimanager</h2>
             
-            <!-- Upload-Button -->
-            <label for="file-uploader" class="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors w-full text-center block mb-4">
-                Dateien hochladen
-            </label>
-            <input type="file" id="file-uploader" multiple class="hidden">
+            <!-- Action Buttons -->
+            <div class="space-y-2 mb-4">
+                <label for="file-uploader" class="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors w-full text-center block">
+                    Dateien hochladen
+                </label>
+                <input type="file" id="file-uploader" multiple class="hidden">
+
+                <button id="load-script-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors w-full text-center block">
+                    Skript laden & ausführen
+                </button>
+                <input type="file" id="script-loader" class="hidden" accept=".py">
+            </div>
             
             <!-- Geladene Dateien Liste -->
             <h3 class="text-md font-semibold text-gray-300 mb-2">Geladene Dateien:</h3>
@@ -99,6 +106,8 @@
         // Dateimanager
         const fileUploader = document.getElementById('file-uploader');
         const fileList = document.getElementById('file-list');
+        const loadScriptBtn = document.getElementById('load-script-btn');
+        const scriptLoader = document.getElementById('script-loader');
 
 
         let pyodide;
@@ -187,6 +196,8 @@
                 // 5. Event-Listener für Tastatureingaben und Datei-Upload
                 inputElement.addEventListener('keydown', onKeydown);
                 fileUploader.addEventListener('change', onFileUpload);
+                loadScriptBtn.addEventListener('click', () => scriptLoader.click());
+                scriptLoader.addEventListener('change', onScriptLoad);
 
             } catch (err) {
                 loadingStatus.textContent = 'Fehler beim Initialisieren von Pyodide.';
@@ -254,6 +265,31 @@
             // Input zurücksetzen, um erneutes Hochladen derselben Datei zu ermöglichen
             event.target.value = null; 
             inputElement.focus();
+        }
+
+        // Event-Handler für das Laden und Ausführen von Skripten
+        async function onScriptLoad(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            addToOutput(`[System] Lade Skript '${file.name}' und führe es aus...`, 'system');
+
+            try {
+                const scriptContent = await file.text();
+
+                // Echo the script content into the console output, similar to a user typing it.
+                addToOutput(promptElement.textContent + scriptContent, 'stdin');
+
+                // Use the existing processCode function to execute the script
+                await processCode(scriptContent);
+
+            } catch (err) {
+                addToOutput(`[System] Fehler beim Ausführen von '${file.name}': ${err.message}`, 'stderr');
+            } finally {
+                // Reset file input to allow reloading the same file
+                event.target.value = null;
+                inputElement.focus();
+            }
         }
 
 
