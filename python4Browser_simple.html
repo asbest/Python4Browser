@@ -58,10 +58,17 @@ Enter zum Ausführen.
 # arr = np.array([1, 2, 3])
 # print(arr * 2)
 "></textarea>
-            <button id="run-btn"
-                class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-200 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
-                Code ausführen (Enter)
-            </button>
+            <div class="flex mt-4 space-x-2">
+                <button id="run-btn"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-200 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
+                    Code ausführen (Enter)
+                </button>
+                <button id="load-btn"
+                    class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-200 ease-in-out">
+                    Skript laden & ausführen
+                </button>
+            </div>
+            <input type="file" id="script-loader" class="hidden" accept=".py">
         </div>
 
         <!-- Rechte Spalte: Ausgabe/Konsole -->
@@ -82,6 +89,8 @@ Enter zum Ausführen.
         const loadingIndicator = document.getElementById('loading');
         const loadingStatus = document.getElementById('loading-status');
         const appContainer = document.getElementById('app-container');
+        const loadButton = document.getElementById('load-btn');
+        const scriptLoader = document.getElementById('script-loader');
 
         let pyodide; // Globale Variable für die Pyodide-Instanz
 
@@ -148,6 +157,25 @@ Enter zum Ausführen.
                         e.preventDefault(); // Verhindert Zeilenumbruch
                         executePythonCode();
                     }
+                });
+
+                // 7. Event-Listener für den "Load"-Button
+                loadButton.addEventListener('click', () => {
+                    scriptLoader.click();
+                });
+
+                // 8. Event-Listener für das Laden eines Skripts
+                scriptLoader.addEventListener('change', (event) => {
+                    const file = event.target.files[0];
+                    if (!file) {
+                        return;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        codeEditor.value = e.target.result;
+                        executePythonCode();
+                    };
+                    reader.readAsText(file);
                 });
 
             } catch (err) {
