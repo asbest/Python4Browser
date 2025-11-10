@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Python-Interpreter im Browser</title>
+    <title>Python-Interpreter mit Dateiupload</title>
     <!-- 1. Tailwind CSS für das Styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     
@@ -35,7 +35,7 @@
         }
     </style>
 </head>
-<body class="bg-gray-900 text-gray-100 flex flex-col h-screen">
+<body class="bg-gray-900 text-gray-100 flex flex-col h-screen overflow-hidden">
 
     <!-- Ladeanzeige -->
     <div id="loading" class="flex-grow flex flex-col justify-center items-center">
@@ -44,23 +44,43 @@
     </div>
 
     <!-- Hauptanwendung (zunächst ausgeblendet) -->
-    <main id="app-container" class="flex-grow flex flex-col p-4 overflow-hidden" style="display: none;">
+    <main id="app-container" class="flex-grow flex flex-row overflow-hidden" style="display: none;">
     
-        <!-- Die Konsole selbst (Verlauf) -->
-        <div id="console-output" class="flex-grow overflow-y-auto font-mono text-sm whitespace-pre-wrap break-words">
-            <!-- Verlauf wird hier dynamisch eingefügt -->
+        <!-- Linke Spalte: Dateimanager -->
+        <div id="file-sidebar" class="w-1/4 bg-gray-800 p-4 flex flex-col border-r border-gray-700">
+            <h2 class="text-lg font-semibold text-white mb-3">Dateimanager</h2>
+            
+            <!-- Upload-Button -->
+            <label for="file-uploader" class="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors w-full text-center block mb-4">
+                Dateien hochladen
+            </label>
+            <input type="file" id="file-uploader" multiple class="hidden">
+            
+            <!-- Geladene Dateien Liste -->
+            <h3 class="text-md font-semibold text-gray-300 mb-2">Geladene Dateien:</h3>
+            <ul id="file-list" class="flex-grow overflow-y-auto bg-gray-900 rounded p-2">
+                <!-- Dateiliste wird hier dynamisch eingefügt -->
+            </ul>
         </div>
 
-        <!-- Eingabezeile am Boden -->
-        <div id="input-area" class="flex w-full mt-2 font-mono text-sm items-start">
-            <span id="prompt" class="text-blue-400 flex-shrink-0">>>>&nbsp;</span>
-            <!-- \u00A0 ist ein geschütztes Leerzeichen -->
-            <textarea id="console-input" 
-                      rows="1" 
-                      class="flex-grow bg-transparent text-gray-100 focus:outline-none resize-none ml-2"
-                      placeholder="Python-Code eingeben... (Shift+Enter für Zeilenumbruch)"
-                      autofocus
-                      spellcheck="false"></textarea>
+        <!-- Rechte Spalte: Konsole -->
+        <div id="console-area" class="w-3/4 flex flex-col p-4">
+            <!-- Die Konsole selbst (Verlauf) -->
+            <div id="console-output" class="flex-grow overflow-y-auto font-mono text-sm whitespace-pre-wrap break-words">
+                <!-- Verlauf wird hier dynamisch eingefügt -->
+            </div>
+
+            <!-- Eingabezeile am Boden -->
+            <div id="input-area" class="flex w-full mt-2 font-mono text-sm items-start">
+                <span id="prompt" class="text-blue-400 flex-shrink-0">>>>&nbsp;</span>
+                <!-- \u00A0 ist ein geschütztes Leerzeichen -->
+                <textarea id="console-input" 
+                          rows="1" 
+                          class="flex-grow bg-transparent text-gray-100 focus:outline-none resize-none ml-2"
+                          placeholder="Python-Code eingeben... (Shift+Enter für Zeilenumbruch)"
+                          autofocus
+                          spellcheck="false"></textarea>
+            </div>
         </div>
 
     </main>
@@ -70,12 +90,21 @@
         const loadingIndicator = document.getElementById('loading');
         const loadingStatus = document.getElementById('loading-status');
         const appContainer = document.getElementById('app-container');
+        
+        // Konsole
         const consoleOutput = document.getElementById('console-output');
         const promptElement = document.getElementById('prompt');
         const inputElement = document.getElementById('console-input');
+        
+        // Dateimanager
+        const fileUploader = document.getElementById('file-uploader');
+        const fileList = document.getElementById('file-list');
+
 
         let pyodide;
         let codeBuffer = ""; // Für mehrzeilige Eingaben
+
+        // --- Hilfsfunktionen für die UI ---
 
         // Funktion zum automatischen Anpassen der Textarea-Höhe
         function autoGrow(element) {
@@ -102,6 +131,9 @@
                 case 'repr':
                     line.className = 'text-gray-400'; // Ergebnis-Repräsentation
                     break;
+                case 'system':
+                    line.className = 'text-green-400'; // Systemnachrichten (Upload)
+                    break;
                 case 'stdout':
                 default:
                     line.className = 'text-gray-100'; // Standard-Ausgabe (print)
@@ -113,7 +145,8 @@
             consoleOutput.scrollTop = consoleOutput.scrollHeight;
         }
 
-        // Hauptfunktion zur Initialisierung von Pyodide
+        // --- Haupt-Initialisierungsfunktion ---
+
         async function main() {
             try {
                 // 1. Pyodide initialisieren und stdout/stderr umleiten
@@ -132,8 +165,6 @@
                 loadingStatus.textContent = 'Pakete geladen. Importiere Aliase...';
 
                 // 3. Pakete importieren und Willkommensnachricht
-                // Wir fangen die Ausgabe der Python-Willkommensnachricht ab
-                let initOutput = "";
                 await pyodide.runPythonAsync(`
                     import pandas as pd
                     import numpy as np
@@ -144,6 +175,7 @@
                     print("Pyodide initialisiert.")
                     print(f"Python-Version: {sys.version.split(' ')[0]}")
                     print("Verfügbare Bibliotheken: pandas (pd), numpy (np), networkx (nx)")
+                    print("Verwende den 'Dateien hochladen'-Button, um lokale Dateien verfügbar zu machen.")
                     print("--------------------------------------------------")
                 `);
 
@@ -152,14 +184,17 @@
                 appContainer.style.display = 'flex';
                 inputElement.focus();
 
-                // 5. Event-Listener für Tastatureingaben
+                // 5. Event-Listener für Tastatureingaben und Datei-Upload
                 inputElement.addEventListener('keydown', onKeydown);
+                fileUploader.addEventListener('change', onFileUpload);
 
             } catch (err) {
                 loadingStatus.textContent = 'Fehler beim Initialisieren von Pyodide.';
                 addToOutput(`[Startup Error] ${err.message}`, 'stderr');
             }
         }
+
+        // --- Event-Handler ---
 
         // Event-Handler für Tastendrücke in der Eingabe
         async function onKeydown(e) {
@@ -185,6 +220,42 @@
                 await processCode(code);
             }
         }
+        
+        // Event-Handler für Datei-Uploads
+        async function onFileUpload(event) {
+            const files = event.target.files;
+            if (!files.length) return;
+
+            addToOutput(`[System] Lade ${files.length} Datei(en)...`, 'system');
+
+            for (const file of files) {
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const data = new Uint8Array(arrayBuffer);
+                    
+                    // Datei in das virtuelle Dateisystem von Pyodide (Emscripten FS) schreiben
+                    // Dateien werden im Stammverzeichnis '/' gespeichert, was das aktuelle Arbeitsverzeichnis ist
+                    pyodide.FS.writeFile(file.name, data, { encoding: 'binary' });
+
+                    // Dateiliste in der UI aktualisieren
+                    const li = document.createElement('li');
+                    li.className = 'text-gray-300 font-mono text-sm truncate p-1';
+                    li.textContent = file.name;
+                    fileList.appendChild(li);
+
+                    // Bestätigung in der Konsole
+                    addToOutput(`[System] Datei '${file.name}' geladen. Verfügbar als './${file.name}'`, 'system');
+
+                } catch (err) {
+                    addToOutput(`[System] Fehler beim Laden von '${file.name}': ${err.message}`, 'stderr');
+                }
+            }
+            
+            // Input zurücksetzen, um erneutes Hochladen derselben Datei zu ermöglichen
+            event.target.value = null; 
+            inputElement.focus();
+        }
+
 
         // Funktion zur Verarbeitung des eingegebenen Codes
         async function processCode(line) {
