@@ -148,14 +148,18 @@
         // --- Hilfsfunktionen für die UI ---
 
         // Funktion zum Hinzufügen von Einträgen zum Konsolenverlauf
-        function addToOutput(text, type = 'stdout') {
-            const line = document.createElement('div');
-            
-            // Zeilenumbrüche am Ende entfernen, da 'div' bereits ein Block-Element ist
-            line.textContent = text.trimEnd(); 
+        function addToOutput(content, type = 'stdout') {
+            if (type === 'image') {
+                const img = document.createElement('img');
+                img.src = content;
+                img.className = 'max-w-full h-auto my-2 rounded-md';
+                consoleOutput.appendChild(img);
+            } else {
+                const line = document.createElement('div');
+                line.textContent = content.trimEnd();
 
-            switch (type) {
-                case 'stdin':
+                switch (type) {
+                    case 'stdin':
                     line.className = 'text-blue-300'; // Benutzereingabe
                     break;
                 case 'stderr':
@@ -170,9 +174,10 @@
                 case 'stdout':
                 default:
                     line.className = 'text-gray-100'; // Standard-Ausgabe (print)
-                    break;
-            }
-            consoleOutput.appendChild(line);
+                            break;
+                    }
+                    consoleOutput.appendChild(line);
+                }
             
             // Immer ans Ende des Verlaufs scrollen
             consoleOutput.scrollTop = consoleOutput.scrollHeight;
@@ -200,7 +205,7 @@
                 // 3. micropip laden, um weitere Pakete installieren zu können
                 await pyodide.loadPackage('micropip');
 
-                // 4. Pakete importieren
+                // 4. Pakete importieren und Plot-Capture-Funktion einrichten
                 await pyodide.runPythonAsync(`
                     import pandas as pd
                     import numpy as np
@@ -208,6 +213,26 @@
                     import matplotlib.pyplot as plt
                     import io
                     import sys
+                    import base64
+
+                    # Matplotlib anweisen, das 'Agg'-Backend zu verwenden (nicht-interaktiv)
+                    import matplotlib
+                    matplotlib.use('Agg')
+
+                    # Funktion, die den Benutzercode ausführt und Plots abfängt
+                    def run_user_code_and_capture_plot(code):
+                        # Führe den Code aus
+                        exec(code, globals())
+
+                        # Prüfe, ob eine Matplotlib-Figur existiert
+                        if plt.get_fignums():
+                            buf = io.BytesIO()
+                            plt.savefig(buf, format='png')
+                            plt.close('all') # Schließe alle Figuren für den nächsten Plot
+                            buf.seek(0)
+                            img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+                            return f"data:image/png;base64,{img_base64}"
+                        return None
 
                     print("Pyodide initialisiert.")
                     print(f"Python-Version: {sys.version.split(' ')[0]}")
@@ -357,9 +382,19 @@
             monacoEditor.updateOptions({ readOnly: true });
 
             try {
-                let result = await pyodide.runPythonAsync(codeBuffer);
+                // Hole die Wrapper-Funktion aus dem Python-Scope
+                const run_user_code = pyodide.globals.get('run_user_code_and_capture_plot');
+                // Führe den Code über die Wrapper-Funktion aus
+                let result = run_user_code(codeBuffer);
+
                 if (result !== undefined) {
-                    addToOutput(pyodide.globals.get('repr')(result), 'repr');
+                    // Prüfe, ob das Ergebnis ein Base64-Bild ist
+                    if (typeof result === 'string' && result.startsWith('data:image/png;base64,')) {
+                        addToOutput(result, 'image'); // Spezieller Typ für Bilder
+                    } else {
+                        // Andernfalls, gebe die normale Repräsentation aus
+                        addToOutput(pyodide.globals.get('repr')(result), 'repr');
+                    }
                 }
                 codeBuffer = "";
                 promptElement.textContent = ">>>\u00A0";
