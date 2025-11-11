@@ -10,6 +10,9 @@
     <!-- 2. Pyodide (Python für WebAssembly) -->
     <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
 
+    <!-- 3. Monaco Editor (via CDN) -->
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs/loader.js"></script>
+
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -33,6 +36,19 @@
         #console-input {
             overflow-y: hidden;
         }
+
+        /* Styling für die verschiebbare Trennlinie */
+        #resizer {
+            width: 8px;
+            cursor: col-resize;
+            background-color: #1f2937; /* gray-800 */
+            border-left: 1px solid #4b5563; /* gray-600 */
+            border-right: 1px solid #4b5563; /* gray-600 */
+            transition: background-color 0.2s;
+        }
+        #resizer:hover {
+            background-color: #374151; /* gray-700 */
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-gray-100 flex flex-col h-screen overflow-hidden">
@@ -47,7 +63,7 @@
     <main id="app-container" class="flex-grow flex flex-row overflow-hidden" style="display: none;">
     
         <!-- Linke Spalte: Dateimanager -->
-        <div id="file-sidebar" class="w-1/4 bg-gray-800 p-4 flex flex-col border-r border-gray-700">
+        <div id="file-sidebar" class="bg-gray-800 p-4 flex flex-col border-r border-gray-700" style="width: var(--sidebar-width, 25%);">
             <h2 class="text-lg font-semibold text-white mb-3">Dateimanager</h2>
             
             <!-- Action Buttons -->
@@ -61,32 +77,43 @@
                     Skript laden & ausführen
                 </button>
                 <input type="file" id="script-loader" class="hidden" accept=".py">
+
+                <button id="save-history-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded transition-colors w-full text-center block">
+                    Verlauf herunterladen
+                </button>
+            </div>
+
+            <!-- Paket-Installation -->
+            <h3 class="text-md font-semibold text-gray-300 mt-4 mb-2">Paket installieren</h3>
+            <div class="flex space-x-2">
+                <input type="text" id="package-name-input" placeholder="Paketname" class="flex-grow bg-gray-900 border border-gray-700 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+                <button id="install-package-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1 px-3 rounded-md text-sm">
+                    Installieren
+                </button>
             </div>
             
             <!-- Geladene Dateien Liste -->
-            <h3 class="text-md font-semibold text-gray-300 mb-2">Geladene Dateien:</h3>
+            <h3 class="text-md font-semibold text-gray-300 mt-4 mb-2">Geladene Dateien:</h3>
             <ul id="file-list" class="flex-grow overflow-y-auto bg-gray-900 rounded p-2">
                 <!-- Dateiliste wird hier dynamisch eingefügt -->
             </ul>
         </div>
 
+        <!-- Trennlinie -->
+        <div id="resizer"></div>
+
         <!-- Rechte Spalte: Konsole -->
-        <div id="console-area" class="w-3/4 flex flex-col p-4">
+        <div id="console-area" class="flex-grow flex flex-col p-4">
             <!-- Die Konsole selbst (Verlauf) -->
             <div id="console-output" class="flex-grow overflow-y-auto font-mono text-sm whitespace-pre-wrap break-words">
                 <!-- Verlauf wird hier dynamisch eingefügt -->
             </div>
 
             <!-- Eingabezeile am Boden -->
-            <div id="input-area" class="flex w-full mt-2 font-mono text-sm items-start">
-                <span id="prompt" class="text-blue-400 flex-shrink-0">>>>&nbsp;</span>
-                <!-- \u00A0 ist ein geschütztes Leerzeichen -->
-                <textarea id="console-input" 
-                          rows="1" 
-                          class="flex-grow bg-transparent text-gray-100 focus:outline-none resize-none ml-2"
-                          placeholder="Python-Code eingeben... (Shift+Enter für Zeilenumbruch)"
-                          autofocus
-                          spellcheck="false"></textarea>
+            <div id="input-area" class="flex w-full mt-2 font-mono text-sm items-stretch">
+                <span id="prompt" class="text-blue-400 flex-shrink-0 pt-1">>>>&nbsp;</span>
+                <!-- Container für den Monaco Editor als Eingabefeld -->
+                <div id="editor-container" class="flex-grow border border-gray-700 rounded-md" style="height: 80px;"></div>
             </div>
         </div>
 
@@ -97,31 +124,28 @@
         const loadingIndicator = document.getElementById('loading');
         const loadingStatus = document.getElementById('loading-status');
         const appContainer = document.getElementById('app-container');
+        const resizer = document.getElementById('resizer');
         
         // Konsole
         const consoleOutput = document.getElementById('console-output');
         const promptElement = document.getElementById('prompt');
-        const inputElement = document.getElementById('console-input');
+        const editorContainer = document.getElementById('editor-container');
         
         // Dateimanager
         const fileUploader = document.getElementById('file-uploader');
         const fileList = document.getElementById('file-list');
         const loadScriptBtn = document.getElementById('load-script-btn');
         const scriptLoader = document.getElementById('script-loader');
+        const saveHistoryBtn = document.getElementById('save-history-btn');
+        const packageNameInput = document.getElementById('package-name-input');
+        const installPackageBtn = document.getElementById('install-package-btn');
 
 
         let pyodide;
+        let monacoEditor;
         let codeBuffer = ""; // Für mehrzeilige Eingaben
 
         // --- Hilfsfunktionen für die UI ---
-
-        // Funktion zum automatischen Anpassen der Textarea-Höhe
-        function autoGrow(element) {
-            element.style.height = 'auto'; // Zurücksetzen
-            element.style.height = (element.scrollHeight) + 'px'; // Auf Scroll-Höhe setzen
-        }
-        
-        inputElement.addEventListener('input', () => autoGrow(inputElement));
 
         // Funktion zum Hinzufügen von Einträgen zum Konsolenverlauf
         function addToOutput(text, type = 'stdout') {
@@ -158,7 +182,7 @@
 
         async function main() {
             try {
-                // 1. Pyodide initialisieren und stdout/stderr umleiten
+                // 1. Pyodide initialisieren
                 pyodide = await loadPyodide({
                     stdout: (text) => addToOutput(text, 'stdout'),
                     stderr: (text) => addToOutput(text, 'stderr')
@@ -167,23 +191,27 @@
                 loadingStatus.textContent = 'Python-Laufzeitumgebung geladen. Lade Pakete...';
 
                 // 2. Pakete laden
-                const packages = ['numpy', 'pandas', 'networkx'];
+                const packages = ['numpy', 'pandas', 'networkx', 'matplotlib'];
                 loadingStatus.textContent = `Lade: ${packages.join(', ')}... (Dies kann einen Moment dauern)`;
                 await pyodide.loadPackage(packages);
 
                 loadingStatus.textContent = 'Pakete geladen. Importiere Aliase...';
 
-                // 3. Pakete importieren und Willkommensnachricht
+                // 3. micropip laden, um weitere Pakete installieren zu können
+                await pyodide.loadPackage('micropip');
+
+                // 4. Pakete importieren
                 await pyodide.runPythonAsync(`
                     import pandas as pd
                     import numpy as np
                     import networkx as nx
+                    import matplotlib.pyplot as plt
                     import io
                     import sys
 
                     print("Pyodide initialisiert.")
                     print(f"Python-Version: {sys.version.split(' ')[0]}")
-                    print("Verfügbare Bibliotheken: pandas (pd), numpy (np), networkx (nx)")
+                    print("Verfügbare Bibliotheken: pandas (pd), numpy (np), networkx (nx), matplotlib.pyplot (plt)")
                     print("Verwende den 'Dateien hochladen'-Button, um lokale Dateien verfügbar zu machen.")
                     print("--------------------------------------------------")
                 `);
@@ -191,13 +219,19 @@
                 // 4. Ladeanzeige ausblenden und App anzeigen
                 loadingIndicator.style.display = 'none';
                 appContainer.style.display = 'flex';
-                inputElement.focus();
+                monacoEditor.focus();
 
-                // 5. Event-Listener für Tastatureingaben und Datei-Upload
-                inputElement.addEventListener('keydown', onKeydown);
+                // 5. Event-Listener für Datei-Uploads
                 fileUploader.addEventListener('change', onFileUpload);
                 loadScriptBtn.addEventListener('click', () => scriptLoader.click());
                 scriptLoader.addEventListener('change', onScriptLoad);
+                saveHistoryBtn.addEventListener('click', saveHistoryToFile);
+                installPackageBtn.addEventListener('click', installPackage);
+                packageNameInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        installPackage();
+                    }
+                });
 
             } catch (err) {
                 loadingStatus.textContent = 'Fehler beim Initialisieren von Pyodide.';
@@ -207,29 +241,20 @@
 
         // --- Event-Handler ---
 
-        // Event-Handler für Tastendrücke in der Eingabe
-        async function onKeydown(e) {
-            // Code ausführen, wenn 'Enter' gedrückt wird (und nicht Shift+Enter)
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault(); // Verhindert Standard-Zeilenumbruch
+        // Event-Handler für Tastendrücke (wird im Editor-Setup verwendet)
+        async function handleEnterKey() {
+            const code = monacoEditor.getValue();
+            monacoEditor.setValue(''); // Editor leeren
 
-                const code = inputElement.value;
-                inputElement.value = ''; // Eingabefeld leeren
-                autoGrow(inputElement); // Höhe zurücksetzen
-                
-                // Echo der Eingabe in den Verlauf
-                addToOutput(promptElement.textContent + code, 'stdin');
+            addToOutput(promptElement.textContent + code, 'stdin');
 
-                // Wenn der Benutzer nur Enter drückt, ohne Code...
-                if (code.trim() === '' && codeBuffer === '') {
-                    consoleOutput.scrollTop = consoleOutput.scrollHeight;
-                    inputElement.focus();
-                    return;
-                }
-
-                // Code-Puffer verarbeiten
-                await processCode(code);
+            if (code.trim() === '' && codeBuffer === '') {
+                consoleOutput.scrollTop = consoleOutput.scrollHeight;
+                monacoEditor.focus();
+                return;
             }
+
+            await processCode(code);
         }
         
         // Event-Handler für Datei-Uploads
@@ -264,7 +289,7 @@
             
             // Input zurücksetzen, um erneutes Hochladen derselben Datei zu ermöglichen
             event.target.value = null; 
-            inputElement.focus();
+            monacoEditor.focus();
         }
 
         // Event-Handler für das Laden und Ausführen von Skripten
@@ -288,53 +313,133 @@
             } finally {
                 // Reset file input to allow reloading the same file
                 event.target.value = null;
-                inputElement.focus();
+                monacoEditor.focus();
+            }
+        }
+
+
+        // Event-Handler für die Paketinstallation
+        async function installPackage() {
+            const packageName = packageNameInput.value.trim();
+            if (!packageName) {
+                addToOutput('[System] Bitte geben Sie einen Paketnamen ein.', 'system');
+                return;
+            }
+
+            addToOutput(`[System] Installiere Paket '${packageName}'...`, 'system');
+            installPackageBtn.disabled = true;
+            installPackageBtn.textContent = '...';
+
+            try {
+                await pyodide.runPythonAsync(`
+                    import micropip
+                    await micropip.install('${packageName}')
+                `);
+                addToOutput(`[System] Paket '${packageName}' erfolgreich installiert.`, 'system');
+                // Versuch, das Paket zu importieren, um die Installation zu bestätigen
+                pyodide.pyimport(packageName);
+                addToOutput(`[System] '${packageName}' kann jetzt importiert werden.`, 'system');
+            } catch (err) {
+                addToOutput(`[System] Fehler bei der Installation von '${packageName}': ${err.message}`, 'stderr');
+            } finally {
+                packageNameInput.value = '';
+                installPackageBtn.disabled = false;
+                installPackageBtn.textContent = 'Installieren';
+                monacoEditor.focus();
             }
         }
 
 
         // Funktion zur Verarbeitung des eingegebenen Codes
         async function processCode(line) {
-            codeBuffer += line + "\n"; // Zeile zum Puffer hinzufügen
+            codeBuffer += line + "\n";
             
-            inputElement.disabled = true; // Eingabe sperren während der Ausführung
+            monacoEditor.updateOptions({ readOnly: true });
 
             try {
-                // Versuche, den gesamten Puffer auszuführen
                 let result = await pyodide.runPythonAsync(codeBuffer);
-                
-                // Wenn erfolgreich, war der Code vollständig
                 if (result !== undefined) {
                     addToOutput(pyodide.globals.get('repr')(result), 'repr');
                 }
-                
-                codeBuffer = ""; // Puffer zurücksetzen
-                promptElement.textContent = ">>>\u00A0"; // Prompt zurücksetzen
-
+                codeBuffer = "";
+                promptElement.textContent = ">>>\u00A0";
             } catch (err) {
                 const errMsg = err.message;
-                // Prüfen, ob der Fehler ein Hinweis auf einen unvollständigen Block ist
                 if (errMsg.includes("EOF") || 
                     errMsg.includes("IndentationError: expected an indented block") ||
-                    errMsg.includes("SyntaxError: incomplete input")) 
-                {
-                    // Code ist unvollständig, auf nächste Zeile warten
+                    errMsg.includes("SyntaxError: incomplete input")) {
                     promptElement.textContent = "... \u00A0";
                 } else {
-                    // Echter Fehler (wurde bereits durch stderr-Redirect ausgegeben)
-                    codeBuffer = ""; // Puffer zurücksetzen
-                    promptElement.textContent = ">>>\u00A0"; // Prompt zurücksetzen
+                    codeBuffer = "";
+                    promptElement.textContent = ">>>\u00A0";
                 }
             } finally {
-                inputElement.disabled = false; // Eingabe freigeben
-                inputElement.focus();
-                // Sicherstellen, dass ans Ende gescrollt wird
+                monacoEditor.updateOptions({ readOnly: false });
+                monacoEditor.focus();
                 consoleOutput.scrollTop = consoleOutput.scrollHeight;
             }
         }
 
-        // Anwendung starten
-        main();
+        // --- Monaco Editor Initialisierung ---
+        require.config({ paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs' }});
+        require(['vs/editor/editor.main'], function() {
+            monacoEditor = monaco.editor.create(editorContainer, {
+                language: 'python',
+                theme: 'vs-dark',
+                automaticLayout: true,
+                fontSize: 14,
+                minimap: { enabled: false },
+                wordWrap: 'on',
+                contextmenu: false,
+                // Weniger UI-Elemente für ein schlankeres Aussehen
+                lineNumbers: 'off',
+                renderLineHighlight: 'none',
+                scrollbar: {
+                    vertical: 'auto',
+                    horizontal: 'auto'
+                }
+            });
+
+            // Tastaturkürzel für Enter (Ausführen) und Shift+Enter (neue Zeile)
+            monacoEditor.addCommand(monaco.KeyCode.Enter, handleEnterKey, '!findWidgetVisible && !suggestWidgetVisible');
+
+            main(); // Pyodide-Initialisierung starten
+        });
+
+        // Funktion zum Speichern des Konsolenverlaufs
+        function saveHistoryToFile() {
+            const historyText = consoleOutput.innerText;
+            const blob = new Blob([historyText], { type: 'text/x-python' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'python_history.py';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            monacoEditor.focus();
+        }
+
+        // --- Logik für die anpassbare Fenstergröße ---
+        resizer.addEventListener('mousedown', function(e) {
+            e.preventDefault();
+            window.addEventListener('mousemove', resize);
+            window.addEventListener('mouseup', stopResize);
+        });
+
+        function resize(e) {
+            const sidebar = document.getElementById('file-sidebar');
+            const newWidth = (e.clientX / window.innerWidth) * 100;
+            // Begrenzung der Breite, um zu schmales Ziehen zu verhindern
+            if (newWidth > 15 && newWidth < 60) {
+                sidebar.style.width = newWidth + '%';
+            }
+        }
+
+        function stopResize() {
+            window.removeEventListener('mousemove', resize);
+        }
     </script>
 </body>
 </html>
