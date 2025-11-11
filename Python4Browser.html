@@ -13,9 +13,6 @@
     <!-- 3. Monaco Editor (via CDN) -->
     <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs/loader.js"></script>
 
-    <!-- 4. Plotly.js for interactive plots -->
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -197,23 +194,6 @@
 
         // Function to add entries to the console history
         function addToOutput(text, type = 'stdout') {
-            if (type === 'repr' && text.startsWith('PLOTLY_JSON:')) {
-                const jsonStr = text.substring(12);
-                try {
-                    const plotData = JSON.parse(jsonStr);
-                    const plotDiv = document.createElement('div');
-                    plotDiv.style.width = '100%';
-                    plotDiv.style.height = '400px';
-                    consoleOutput.appendChild(plotDiv);
-                    Plotly.newPlot(plotDiv, plotData.data, plotData.layout);
-                    consoleOutput.scrollTop = consoleOutput.scrollHeight;
-                    return;
-                } catch (e) {
-                    text = `Error rendering Plotly chart: ${e.message}`;
-                    type = 'stderr';
-                }
-            }
-
             const line = document.createElement('div');
             
             // Remove trailing newlines, as 'div' is already a block element
@@ -264,14 +244,8 @@
 
                 // 3. Load micropip to install other packages
                 await pyodide.loadPackage('micropip');
-                const micropip = pyodide.pyimport("micropip");
 
-                // 4. Install Plotly
-                loadingStatus.textContent = 'Installing Plotly...';
-                await micropip.install('plotly');
-
-                // 5. Import packages and set up Plotly rendering
-                loadingStatus.textContent = 'Importing packages...';
+                // 4. Import packages
                 await pyodide.runPythonAsync(`
                     import pandas as pd
                     import numpy as np
@@ -282,24 +256,12 @@
 
                     print("Pyodide initialized.")
                     print(f"Python version: {sys.version.split(' ')[0]}")
-                    print("Available libraries: pandas (pd), numpy (np), networkx (nx), matplotlib.pyplot (plt), plotly")
+                    print("Available libraries: pandas (pd), numpy (np), networkx (nx), matplotlib.pyplot (plt)")
                     print("Use the 'Upload Files' button to make local files available.")
                     print("--------------------------------------------------")
-
-                    # Custom repr for Plotly figures
-                    import json
-                    import plotly
-                    _original_repr = pyodide.globals.get('repr')
-
-                    def _custom_repr(obj):
-                        if isinstance(obj, plotly.graph_objs._figure.Figure):
-                            return f"PLOTLY_JSON:{obj.to_json()}"
-                        return _original_repr(obj)
-
-                    pyodide.globals.set('repr', _custom_repr)
                 `);
 
-                // 6. Hide loading indicator and show app
+                // 5. Hide loading indicator and show app
                 loadingIndicator.style.display = 'none';
                 appContainer.style.display = 'flex';
                 monacoEditor.focus();
@@ -400,7 +362,7 @@
         function openModal(filename, content) {
             editorFilename.textContent = filename;
             fileEditor.setValue(content);
-            editorModal.classList.remove('hidden');
+            editorModal.style.display = 'flex';
             saveFileBtn.onclick = () => {
                 const newContent = fileEditor.getValue();
                 pyodide.FS.writeFile(filename, newContent, { encoding: 'utf8' });
@@ -410,7 +372,7 @@
         }
 
         function closeModal() {
-            editorModal.classList.add('hidden');
+            editorModal.style.display = 'none';
         }
 
         // Event handler for key presses (used in editor setup)
