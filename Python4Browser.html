@@ -84,6 +84,9 @@
             
             <!-- Action Buttons -->
             <div class="space-y-2 mb-4">
+                <button id="new-file-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded transition-colors w-full text-center block">
+                    New File
+                </button>
                 <label for="file-uploader" class="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors w-full text-center block">
                     Upload Files
                 </label>
@@ -134,6 +137,20 @@
         </div>
     </main>
 
+    <!-- File Editor Modal -->
+    <div id="editor-modal" class="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center hidden">
+        <div class="bg-gray-800 rounded-lg shadow-xl w-3/4 h-3/4 flex flex-col">
+            <div class="p-4 border-b border-gray-700 flex justify-between items-center">
+                <h3 id="editor-filename" class="text-lg font-semibold text-white">Edit File</h3>
+                <div>
+                    <button id="save-file-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors">Save</button>
+                    <button id="close-modal-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded transition-colors ml-2">Close</button>
+                </div>
+            </div>
+            <div id="file-editor-container" class="flex-grow"></div>
+        </div>
+    </div>
+
     <script type="module">
         // DOM Elements
         const loadingIndicator = document.getElementById('loading');
@@ -157,10 +174,21 @@
         const toggleSidebarBtn = document.getElementById('toggle-sidebar-btn');
         const toggleSidebarIcon = document.getElementById('toggle-sidebar-icon');
         const fileSidebar = document.getElementById('file-sidebar');
+        const newFileBtn = document.getElementById('new-file-btn');
+
+        // Editor Modal
+        const editorModal = document.getElementById('editor-modal');
+        const editorFilename = document.getElementById('editor-filename');
+        const fileEditorContainer = document.getElementById('file-editor-container');
+        const saveFileBtn = document.getElementById('save-file-btn');
+        const closeModalBtn = document.getElementById('close-modal-btn');
 
         let pyodide;
         let monacoEditor;
+        let fileEditor;
         let codeBuffer = ""; // For multi-line input
+        let commandHistory = [];
+        let historyIndex = -1;
 
         // --- UI Helper Functions ---
 
@@ -250,6 +278,9 @@
                     }
                 });
 
+                newFileBtn.addEventListener('click', createNewFile);
+                closeModalBtn.addEventListener('click', closeModal);
+
             } catch (err) {
                 loadingStatus.textContent = 'Error initializing Pyodide.';
                 addToOutput(`[Startup Error] ${err.message}`, 'stderr');
@@ -258,12 +289,103 @@
 
         // --- Event Handlers ---
 
+        function renderFileList() {
+            fileList.innerHTML = '';
+            const files = pyodide.FS.readdir('.');
+            files.forEach(file => {
+                if (file !== '.' && file !== '..') {
+                    const li = document.createElement('li');
+                    li.className = 'text-gray-300 font-mono text-sm truncate p-1 flex justify-between items-center';
+
+                    const fileName = document.createElement('span');
+                    fileName.textContent = file;
+                    li.appendChild(fileName);
+
+                    const buttons = document.createElement('div');
+                    buttons.innerHTML = `
+                        <button class="edit-file-btn text-gray-400 hover:text-white" data-filename="${file}">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L15.232 5.232z" /></svg>
+                        </button>
+                        <button class="download-file-btn text-gray-400 hover:text-white ml-2" data-filename="${file}">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                        </button>
+                        <button class="delete-file-btn text-red-400 hover:text-red-600 ml-2" data-filename="${file}">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
+                    `;
+                    li.appendChild(buttons);
+
+                    fileList.appendChild(li);
+                }
+            });
+
+            // Add event listeners for the new buttons
+            document.querySelectorAll('.edit-file-btn').forEach(btn => btn.addEventListener('click', (e) => editFile(e.currentTarget.dataset.filename)));
+            document.querySelectorAll('.delete-file-btn').forEach(btn => btn.addEventListener('click', (e) => deleteFile(e.currentTarget.dataset.filename)));
+            document.querySelectorAll('.download-file-btn').forEach(btn => btn.addEventListener('click', (e) => downloadFile(e.currentTarget.dataset.filename)));
+        }
+
+        function createNewFile() {
+            const filename = prompt("Enter the name for the new file:", "new_file.py");
+            if (filename) {
+                pyodide.FS.writeFile(filename, '', { encoding: 'utf8' });
+                renderFileList();
+                editFile(filename);
+            }
+        }
+
+        function editFile(filename) {
+            const content = pyodide.FS.readFile(filename, { encoding: 'utf8' });
+            openModal(filename, content);
+        }
+
+        function deleteFile(filename) {
+            if (confirm(`Are you sure you want to delete ${filename}?`)) {
+                pyodide.FS.unlink(filename);
+                renderFileList();
+            }
+        }
+
+        function downloadFile(filename) {
+            const content = pyodide.FS.readFile(filename, { encoding: 'binary' });
+            const blob = new Blob([content]);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function openModal(filename, content) {
+            editorFilename.textContent = filename;
+            fileEditor.setValue(content);
+            editorModal.style.display = 'flex';
+            saveFileBtn.onclick = () => {
+                const newContent = fileEditor.getValue();
+                pyodide.FS.writeFile(filename, newContent, { encoding: 'utf8' });
+                closeModal();
+                addToOutput(`[System] File '${filename}' saved.`, 'system');
+            };
+        }
+
+        function closeModal() {
+            editorModal.style.display = 'none';
+        }
+
         // Event handler for key presses (used in editor setup)
         async function handleEnterKey() {
             const code = monacoEditor.getValue();
             monacoEditor.setValue(''); // Clear editor
 
             addToOutput(promptElement.textContent + code, 'stdin');
+
+            if (code.trim()) {
+                commandHistory.push(code);
+                historyIndex = commandHistory.length;
+            }
 
             if (code.trim() === '' && codeBuffer === '') {
                 consoleOutput.scrollTop = consoleOutput.scrollHeight;
@@ -291,10 +413,7 @@
                     pyodide.FS.writeFile(file.name, data, { encoding: 'binary' });
 
                     // Update the file list in the UI
-                    const li = document.createElement('li');
-                    li.className = 'text-gray-300 font-mono text-sm truncate p-1';
-                    li.textContent = file.name;
-                    fileList.appendChild(li);
+                    renderFileList();
 
                     // Confirmation in the console
                     addToOutput(`[System] File '${file.name}' loaded. Available as './${file.name}'`, 'system');
@@ -417,6 +536,34 @@
 
             // Keyboard shortcuts for Enter (execute) and Shift+Enter (new line)
             monacoEditor.addCommand(monaco.KeyCode.Enter, handleEnterKey, '!findWidgetVisible && !suggestWidgetVisible');
+
+            monacoEditor.onKeyDown(e => {
+                if (e.keyCode === monaco.KeyCode.UpArrow) {
+                    if (historyIndex > 0) {
+                        historyIndex--;
+                        monacoEditor.setValue(commandHistory[historyIndex]);
+                        e.preventDefault();
+                    }
+                } else if (e.keyCode === monaco.KeyCode.DownArrow) {
+                    if (historyIndex < commandHistory.length - 1) {
+                        historyIndex++;
+                        monacoEditor.setValue(commandHistory[historyIndex]);
+                        e.preventDefault();
+                    } else if (historyIndex === commandHistory.length - 1) {
+                        historyIndex++;
+                        monacoEditor.setValue('');
+                        e.preventDefault();
+                    }
+                }
+            });
+
+            fileEditor = monaco.editor.create(fileEditorContainer, {
+                language: 'python',
+                theme: 'vs-dark',
+                automaticLayout: true,
+                fontSize: 14,
+                wordWrap: 'on',
+            });
 
             main(); // Start Pyodide initialization
         });
