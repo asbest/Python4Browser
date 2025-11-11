@@ -167,7 +167,7 @@
                 loadingStatus.textContent = 'Python-Laufzeitumgebung geladen. Lade Pakete...';
 
                 // 2. Pakete laden
-                const packages = ['numpy', 'pandas', 'networkx'];
+                const packages = ['numpy', 'pandas', 'networkx', 'matplotlib'];
                 loadingStatus.textContent = `Lade: ${packages.join(', ')}... (Dies kann einen Moment dauern)`;
                 await pyodide.loadPackage(packages);
 
@@ -178,12 +178,13 @@
                     import pandas as pd
                     import numpy as np
                     import networkx as nx
+                    import matplotlib.pyplot as plt
                     import io
                     import sys
 
                     print("Pyodide initialisiert.")
                     print(f"Python-Version: {sys.version.split(' ')[0]}")
-                    print("Verfügbare Bibliotheken: pandas (pd), numpy (np), networkx (nx)")
+                    print("Verfügbare Bibliotheken: pandas (pd), numpy (np), networkx (nx), matplotlib.pyplot (plt)")
                     print("Verwende den 'Dateien hochladen'-Button, um lokale Dateien verfügbar zu machen.")
                     print("--------------------------------------------------")
                 `);

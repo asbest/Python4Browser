@@ -120,7 +120,7 @@ Enter zum Ausführen.
 
                 // 2. Gewünschte Pakete laden
                 // Pyodide lädt diese aus dem Web.
-                const packages = ['numpy', 'pandas', 'networkx'];
+                const packages = ['numpy', 'pandas', 'networkx', 'matplotlib'];
                 loadingStatus.textContent = `Lade: ${packages.join(', ')}... (Dies kann einen Moment dauern)`;
                 await pyodide.loadPackage(packages);
 
@@ -131,13 +131,14 @@ Enter zum Ausführen.
                     import pandas as pd
                     import numpy as np
                     import networkx as nx
+                    import matplotlib.pyplot as plt
                     import io
                     import sys
 
                     # Willkommensnachricht
                     print("Pyodide initialisiert.")
                     print(f"Python-Version: {sys.version.split(' ')[0]}")
-                    print("Verfügbare Bibliotheken: pandas (pd), numpy (np), networkx (nx)")
+                    print("Verfügbare Bibliotheken: pandas (pd), numpy (np), networkx (nx), matplotlib.pyplot (plt)")
                     print("--------------------------------------------------")
                 `);
 
@@ -176,6 +177,8 @@ Enter zum Ausführen.
                         executePythonCode();
                     };
                     reader.readAsText(file);
+                    // Reset file input to allow reloading the same file
+                    event.target.value = null;
                 });
 
             } catch (err) {
