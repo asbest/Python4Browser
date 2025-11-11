@@ -58,17 +58,10 @@ Enter zum Ausführen.
 # arr = np.array([1, 2, 3])
 # print(arr * 2)
 "></textarea>
-            <div class="flex mt-4 space-x-2">
-                <button id="run-btn"
-                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-200 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
-                    Code ausführen (Enter)
-                </button>
-                <button id="load-btn"
-                    class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-200 ease-in-out">
-                    Skript laden & ausführen
-                </button>
-            </div>
-            <input type="file" id="script-loader" class="hidden" accept=".py">
+            <button id="run-btn"
+                class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-200 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
+                Code ausführen (Enter)
+            </button>
         </div>
 
         <!-- Rechte Spalte: Ausgabe/Konsole -->
@@ -89,8 +82,6 @@ Enter zum Ausführen.
         const loadingIndicator = document.getElementById('loading');
         const loadingStatus = document.getElementById('loading-status');
         const appContainer = document.getElementById('app-container');
-        const loadButton = document.getElementById('load-btn');
-        const scriptLoader = document.getElementById('script-loader');
 
         let pyodide; // Globale Variable für die Pyodide-Instanz
 
@@ -120,7 +111,7 @@ Enter zum Ausführen.
 
                 // 2. Gewünschte Pakete laden
                 // Pyodide lädt diese aus dem Web.
-                const packages = ['numpy', 'pandas', 'networkx', 'matplotlib'];
+                const packages = ['numpy', 'pandas', 'networkx'];
                 loadingStatus.textContent = `Lade: ${packages.join(', ')}... (Dies kann einen Moment dauern)`;
                 await pyodide.loadPackage(packages);
 
@@ -131,14 +122,13 @@ Enter zum Ausführen.
                     import pandas as pd
                     import numpy as np
                     import networkx as nx
-                    import matplotlib.pyplot as plt
                     import io
                     import sys
 
                     # Willkommensnachricht
                     print("Pyodide initialisiert.")
                     print(f"Python-Version: {sys.version.split(' ')[0]}")
-                    print("Verfügbare Bibliotheken: pandas (pd), numpy (np), networkx (nx), matplotlib.pyplot (plt)")
+                    print("Verfügbare Bibliotheken: pandas (pd), numpy (np), networkx (nx)")
                     print("--------------------------------------------------")
                 `);
 
@@ -158,27 +148,6 @@ Enter zum Ausführen.
                         e.preventDefault(); // Verhindert Zeilenumbruch
                         executePythonCode();
                     }
-                });
-
-                // 7. Event-Listener für den "Load"-Button
-                loadButton.addEventListener('click', () => {
-                    scriptLoader.click();
-                });
-
-                // 8. Event-Listener für das Laden eines Skripts
-                scriptLoader.addEventListener('change', (event) => {
-                    const file = event.target.files[0];
-                    if (!file) {
-                        return;
-                    }
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        codeEditor.value = e.target.result;
-                        executePythonCode();
-                    };
-                    reader.readAsText(file);
-                    // Reset file input to allow reloading the same file
-                    event.target.value = null;
                 });
 
             } catch (err) {
