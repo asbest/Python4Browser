@@ -504,6 +504,7 @@
                     errMsg.includes("SyntaxError: incomplete input")) {
                     promptElement.textContent = "... \u00A0";
                 } else {
+                    addToOutput(errMsg, 'stderr');
                     codeBuffer = "";
                     promptElement.textContent = ">>>\u00A0";
                 }
