@@ -104,9 +104,7 @@ Enter zum Ausführen.
                 // stdout/stderr werden umgeleitet, um sie im Ausgabefenster anzuzeigen
                 pyodide = await loadPyodide({
                     stdout: (text) => addToOutput(text, 'stdout'),
-                    stderr: (text) => {
-                        codeEditor.value = text;
-                    }
+                    stderr: (text) => addToOutput(text, 'stderr')
                 });
 
                 loadingStatus.textContent = 'Python-Laufzeitumgebung geladen. Lade Pakete...';
@@ -184,15 +182,12 @@ Enter zum Ausführen.
                     let repr = pyodide.globals.get('repr');
                     addToOutput(repr(result) + '\n', 'repr');
                 }
-
-                // Editor nach erfolgreicher Ausführung leeren
-                codeEditor.value = '';
-
             } catch (err) {
-                // Python-Fehler abfangen und im Editor anzeigen
-                codeEditor.value = err.message;
-
+                // Python-Fehler abfangen und anzeigen
+                addToOutput(`${err.message}\n`, 'stderr');
             } finally {
+                // Editor leeren
+                codeEditor.value = '';
                 // REPL-Prompt für die nächste Eingabe anzeigen
                 addToOutput('>>> ');
                 

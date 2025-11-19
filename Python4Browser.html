@@ -230,9 +230,7 @@
                 // 1. Initialize Pyodide
                 pyodide = await loadPyodide({
                     stdout: (text) => addToOutput(text, 'stdout'),
-                    stderr: (text) => {
-                        monacoEditor.setValue(text);
-                    }
+                    stderr: (text) => addToOutput(text, 'stderr')
                 });
 
                 loadingStatus.textContent = 'Python runtime loaded. Loading packages...';
@@ -380,6 +378,7 @@
         // Event handler for key presses (used in editor setup)
         async function handleEnterKey() {
             const code = monacoEditor.getValue();
+            monacoEditor.setValue(''); // Clear editor
 
             addToOutput(promptElement.textContent + code, 'stdin');
 
@@ -496,8 +495,6 @@
                 if (result !== undefined) {
                     addToOutput(pyodide.globals.get('repr')(result), 'repr');
                 }
-                // On success, clear editor and buffer
-                monacoEditor.setValue('');
                 codeBuffer = "";
                 promptElement.textContent = ">>>\u00A0";
             } catch (err) {
@@ -505,11 +502,9 @@
                 if (errMsg.includes("EOF") || 
                     errMsg.includes("IndentationError: expected an indented block") ||
                     errMsg.includes("SyntaxError: incomplete input")) {
-                    // For incomplete code, wait for more input
                     promptElement.textContent = "... \u00A0";
                 } else {
-                    // On error, show message in editor and clear buffer
-                    monacoEditor.setValue(errMsg);
+                    addToOutput(errMsg, 'stderr');
                     codeBuffer = "";
                     promptElement.textContent = ">>>\u00A0";
                 }
