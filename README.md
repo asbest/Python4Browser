@@ -1,4 +1,8 @@
 # Python4Browser
+
+Demo:
+https://asbest.github.io/Python4Browser/Python4Browser.html
+
 Interactive Python Console in the Browser
 This project is a
 fully-featured, interactive Python console (REPL—Read-Eval-Print Loop) that runs entirely in your web browser. It is encapsulated in a single HTML file and requires no server-side backend or local dependencies.
@@ -17,4 +21,3 @@ How to Use
  * Open the file in any modern web browser (e.g., Chrome, Firefox, Safari, Edge).
  * Wait a moment for Pyodide and the packages to load in the background (a loading indicator will show the progress).
  * Start typing Python code directly into the console and press Enter to execute.
- * 
