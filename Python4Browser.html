@@ -97,6 +97,11 @@
                 </button>
                 <input type="file" id="script-loader" class="hidden" accept=".py">
 
+                <label for="zip-uploader" class="cursor-pointer bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded transition-colors w-full text-center block">
+                    ZIP-Paket hochladen
+                </label>
+                <input type="file" id="zip-uploader" class="hidden" accept=".zip">
+
                 <button id="save-history-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded transition-colors w-full text-center block">
                     Download History
                 </button>
@@ -168,6 +173,7 @@
         const fileList = document.getElementById('file-list');
         const loadScriptBtn = document.getElementById('load-script-btn');
         const scriptLoader = document.getElementById('script-loader');
+        const zipUploader = document.getElementById('zip-uploader');
         const saveHistoryBtn = document.getElementById('save-history-btn');
         const packageNameInput = document.getElementById('package-name-input');
         const installPackageBtn = document.getElementById('install-package-btn');
@@ -270,6 +276,7 @@
                 fileUploader.addEventListener('change', onFileUpload);
                 loadScriptBtn.addEventListener('click', () => scriptLoader.click());
                 scriptLoader.addEventListener('change', onScriptLoad);
+                zipUploader.addEventListener('change', onZipUpload);
                 saveHistoryBtn.addEventListener('click', saveHistoryToFile);
                 installPackageBtn.addEventListener('click', installPackage);
                 packageNameInput.addEventListener('keydown', (e) => {
@@ -426,6 +433,31 @@
             // Reset input to allow re-uploading the same file
             event.target.value = null; 
             monacoEditor.focus();
+        }
+
+        // Event handler for zip uploads
+        async function onZipUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            addToOutput(`[System] Entpacke ZIP-Paket '${file.name}'...`, 'system');
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const data = new Uint8Array(arrayBuffer);
+
+                // Extract zip using pyodide.unpackArchive
+                pyodide.unpackArchive(data, "zip");
+
+                addToOutput(`[System] ZIP-Paket '${file.name}' erfolgreich entpackt.`, 'system');
+                renderFileList();
+            } catch (err) {
+                addToOutput(`[System] Fehler beim Entpacken von '${file.name}': ${err.message}`, 'stderr');
+            } finally {
+                // Reset file input to allow reloading the same file
+                event.target.value = null;
+                monacoEditor.focus();
+            }
         }
 
         // Event handler for loading and running scripts
