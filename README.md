@@ -3,6 +3,8 @@
 Demo:
 https://asbest.github.io/Python4Browser/Python4Browser.html
 
+Please support me on Patreon: https://www.patreon.com/posts/populate-155676276?utm_medium=clipboard_copy&utm_source=copyLink&utm_campaign=postshare_creator&utm_content=join_link
+
 Interactive Python Console in the Browser
 This project is a
 fully-featured, interactive Python console (REPL—Read-Eval-Print Loop) that runs entirely in your web browser. It is encapsulated in a single HTML file and requires no server-side backend or local dependencies.
