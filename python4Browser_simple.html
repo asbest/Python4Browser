@@ -47,7 +47,15 @@
 
         <!-- Linke Spalte: Editor und Steuerung -->
         <div class="flex flex-col md:w-1/2 h-full">
-            <label for="code-editor" class="text-sm font-medium text-gray-300 mb-2">Python Code-Editor</label>
+            <div class="flex justify-between items-center mb-2">
+                <label for="code-editor" class="text-sm font-medium text-gray-300">Python Code-Editor</label>
+                <div>
+                    <label for="zip-uploader" class="cursor-pointer text-xs bg-purple-600 hover:bg-purple-700 text-white font-bold py-1 px-2 rounded transition-colors">
+                        ZIP-Paket hochladen
+                    </label>
+                    <input type="file" id="zip-uploader" class="hidden" accept=".zip">
+                </div>
+            </div>
             <textarea id="code-editor"
                 class="flex-grow bg-gray-800 border border-gray-700 rounded-lg p-4 font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Geben Sie Ihren Python-Code hier ein...
@@ -82,6 +90,7 @@ Enter zum Ausführen.
         const loadingIndicator = document.getElementById('loading');
         const loadingStatus = document.getElementById('loading-status');
         const appContainer = document.getElementById('app-container');
+        const zipUploader = document.getElementById('zip-uploader');
 
         let pyodide; // Globale Variable für die Pyodide-Instanz
 
@@ -141,7 +150,10 @@ Enter zum Ausführen.
                 // 5. Event-Listener für den "Run"-Button
                 runButton.addEventListener('click', executePythonCode);
 
-                // 6. Event-Listener für 'Enter'-Taste im Editor
+                // 6. Event-Listener für ZIP Upload
+                zipUploader.addEventListener('change', onZipUpload);
+
+                // 7. Event-Listener für 'Enter'-Taste im Editor
                 codeEditor.addEventListener('keydown', (e) => {
                     // Code ausführen, wenn 'Enter' gedrückt wird (und nicht Shift+Enter)
                     if (e.key === 'Enter' && !e.shiftKey) {
@@ -195,6 +207,30 @@ Enter zum Ausführen.
                 runButton.disabled = false;
                 runButton.textContent = 'Code ausführen (Enter)';
                 codeEditor.focus();
+            }
+        }
+
+        async function onZipUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            addToOutput(`[System] Entpacke ZIP-Paket '${file.name}'...\n`, 'stdout');
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const data = new Uint8Array(arrayBuffer);
+
+                // Extract zip using pyodide.unpackArchive
+                pyodide.unpackArchive(data, "zip");
+
+                addToOutput(`[System] ZIP-Paket '${file.name}' erfolgreich entpackt.\n`, 'stdout');
+            } catch (err) {
+                addToOutput(`[System] Fehler beim Entpacken von '${file.name}': ${err.message}\n`, 'stderr');
+            } finally {
+                // Reset file input
+                event.target.value = null;
+                codeEditor.focus();
+                addToOutput('>>> ');
             }
         }
 
