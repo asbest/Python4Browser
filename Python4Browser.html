@@ -102,6 +102,10 @@
                 </label>
                 <input type="file" id="zip-uploader" class="hidden" accept=".zip">
 
+                <button id="export-zip-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded transition-colors w-full text-center block">
+                    Projekt exportieren (ZIP)
+                </button>
+
                 <button id="save-history-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded transition-colors w-full text-center block">
                     Download History
                 </button>
@@ -174,6 +178,7 @@
         const loadScriptBtn = document.getElementById('load-script-btn');
         const scriptLoader = document.getElementById('script-loader');
         const zipUploader = document.getElementById('zip-uploader');
+        const exportZipBtn = document.getElementById('export-zip-btn');
         const saveHistoryBtn = document.getElementById('save-history-btn');
         const packageNameInput = document.getElementById('package-name-input');
         const installPackageBtn = document.getElementById('install-package-btn');
@@ -189,7 +194,20 @@
         const saveFileBtn = document.getElementById('save-file-btn');
         const closeModalBtn = document.getElementById('close-modal-btn');
 
-        let pyodide;
+        let pyodideWorker;
+        let workerCallbacks = {};
+        let workerMessageId = 0;
+
+        function runWorker(type, payload = {}) {
+            return new Promise((resolve, reject) => {
+                const id = workerMessageId++;
+                workerCallbacks[id] = { resolve, reject };
+                pyodideWorker.postMessage({ id, type, payload });
+            });
+        }
+
+        window.runWorker = runWorker; // Expose for testing
+
         let monacoEditor;
         let fileEditor;
         let codeBuffer = ""; // For multi-line input
@@ -233,39 +251,34 @@
 
         async function main() {
             try {
-                // 1. Initialize Pyodide
-                pyodide = await loadPyodide({
-                    stdout: (text) => addToOutput(text, 'stdout'),
-                    stderr: (text) => addToOutput(text, 'stderr')
-                });
+                pyodideWorker = new Worker("pyodide_worker.js");
+                pyodideWorker.onmessage = (e) => {
+                    if (e.data.id !== undefined && workerCallbacks[e.data.id]) {
+                        const { resolve, reject } = workerCallbacks[e.data.id];
+                        delete workerCallbacks[e.data.id];
+                        if (e.data.status === 'success') {
+                            resolve(e.data.data);
+                        } else {
+                            reject(new Error(e.data.error));
+                        }
+                    } else if (e.data.type === 'stdout') {
+                        addToOutput(e.data.text, 'stdout');
+                    } else if (e.data.type === 'stderr') {
+                        addToOutput(e.data.text, 'stderr');
+                    } else if (e.data.type === 'repr') {
+                        addToOutput(e.data.text, 'repr');
+                    } else if (e.data.type === 'plot') {
+                        const img = document.createElement('img');
+                        img.src = 'data:image/png;base64,' + e.data.data;
+                        img.className = 'mt-2 max-w-full h-auto border border-gray-700 rounded';
+                        consoleOutput.appendChild(img);
+                        consoleOutput.scrollTop = consoleOutput.scrollHeight;
+                    }
+                };
 
-                loadingStatus.textContent = 'Python runtime loaded. Loading packages...';
+                loadingStatus.textContent = 'Initializing Pyodide (Python Runtime) in worker...';
 
-                // 2. Load packages
-                const packages = ['numpy', 'pandas', 'networkx', 'matplotlib'];
-                loadingStatus.textContent = `Loading: ${packages.join(', ')}... (This may take a moment)`;
-                await pyodide.loadPackage(packages);
-
-                loadingStatus.textContent = 'Packages loaded. Importing aliases...';
-
-                // 3. Load micropip to install other packages
-                await pyodide.loadPackage('micropip');
-
-                // 4. Import packages
-                await pyodide.runPythonAsync(`
-                    import pandas as pd
-                    import numpy as np
-                    import networkx as nx
-                    import matplotlib.pyplot as plt
-                    import io
-                    import sys
-
-                    print("Pyodide initialized.")
-                    print(f"Python version: {sys.version.split(' ')[0]}")
-                    print("Available libraries: pandas (pd), numpy (np), networkx (nx), matplotlib.pyplot (plt)")
-                    print("Use the 'Upload Files' button to make local files available.")
-                    print("--------------------------------------------------")
-                `);
+                await runWorker('init');
 
                 // 5. Hide loading indicator and show app
                 loadingIndicator.style.display = 'none';
@@ -277,6 +290,7 @@
                 loadScriptBtn.addEventListener('click', () => scriptLoader.click());
                 scriptLoader.addEventListener('change', onScriptLoad);
                 zipUploader.addEventListener('change', onZipUpload);
+                exportZipBtn.addEventListener('click', onZipExport);
                 saveHistoryBtn.addEventListener('click', saveHistoryToFile);
                 installPackageBtn.addEventListener('click', installPackage);
                 packageNameInput.addEventListener('keydown', (e) => {
@@ -288,6 +302,8 @@
                 newFileBtn.addEventListener('click', createNewFile);
                 closeModalBtn.addEventListener('click', closeModal);
 
+                await renderFileList();
+
             } catch (err) {
                 loadingStatus.textContent = 'Error initializing Pyodide.';
                 addToOutput(`[Startup Error] ${err.message}`, 'stderr');
@@ -296,9 +312,9 @@
 
         // --- Event Handlers ---
 
-        function renderFileList() {
+        async function renderFileList() {
             fileList.innerHTML = '';
-            const files = pyodide.FS.readdir('.');
+            const files = await runWorker('readdir', { path: '.' });
             files.forEach(file => {
                 if (file !== '.' && file !== '..') {
                     const li = document.createElement('li');
@@ -332,29 +348,29 @@
             document.querySelectorAll('.download-file-btn').forEach(btn => btn.addEventListener('click', (e) => downloadFile(e.currentTarget.dataset.filename)));
         }
 
-        function createNewFile() {
+        async function createNewFile() {
             const filename = prompt("Enter the name for the new file:", "new_file.py");
             if (filename) {
-                pyodide.FS.writeFile(filename, '', { encoding: 'utf8' });
-                renderFileList();
+                await runWorker('writeFile', { path: filename, data: '', encoding: 'utf8' });
+                await renderFileList();
                 editFile(filename);
             }
         }
 
-        function editFile(filename) {
-            const content = pyodide.FS.readFile(filename, { encoding: 'utf8' });
+        async function editFile(filename) {
+            const content = await runWorker('readFile', { path: filename, encoding: 'utf8' });
             openModal(filename, content);
         }
 
-        function deleteFile(filename) {
+        async function deleteFile(filename) {
             if (confirm(`Are you sure you want to delete ${filename}?`)) {
-                pyodide.FS.unlink(filename);
-                renderFileList();
+                await runWorker('unlink', { path: filename });
+                await renderFileList();
             }
         }
 
-        function downloadFile(filename) {
-            const content = pyodide.FS.readFile(filename, { encoding: 'binary' });
+        async function downloadFile(filename) {
+            const content = await runWorker('readFile', { path: filename, encoding: 'binary' });
             const blob = new Blob([content]);
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -370,9 +386,9 @@
             editorFilename.textContent = filename;
             fileEditor.setValue(content);
             editorModal.style.display = 'flex';
-            saveFileBtn.onclick = () => {
+            saveFileBtn.onclick = async () => {
                 const newContent = fileEditor.getValue();
-                pyodide.FS.writeFile(filename, newContent, { encoding: 'utf8' });
+                await runWorker('writeFile', { path: filename, data: newContent, encoding: 'utf8' });
                 closeModal();
                 addToOutput(`[System] File '${filename}' saved.`, 'system');
             };
@@ -417,10 +433,10 @@
                     
                     // Write the file to Pyodide's virtual file system (Emscripten FS)
                     // Files are saved in the root directory '/', which is the current working directory
-                    pyodide.FS.writeFile(file.name, data, { encoding: 'binary' });
+                    await runWorker('writeFile', { path: file.name, data: data, encoding: 'binary' });
 
                     // Update the file list in the UI
-                    renderFileList();
+                    await renderFileList();
 
                     // Confirmation in the console
                     addToOutput(`[System] File '${file.name}' loaded. Available as './${file.name}'`, 'system');
@@ -447,16 +463,35 @@
                 const data = new Uint8Array(arrayBuffer);
 
                 // Extract zip using pyodide.unpackArchive
-                pyodide.unpackArchive(data, "zip");
+                await runWorker('unpackArchive', { data: data, format: 'zip' });
 
                 addToOutput(`[System] ZIP-Paket '${file.name}' erfolgreich entpackt.`, 'system');
-                renderFileList();
+                await renderFileList();
             } catch (err) {
                 addToOutput(`[System] Fehler beim Entpacken von '${file.name}': ${err.message}`, 'stderr');
             } finally {
                 // Reset file input to allow reloading the same file
                 event.target.value = null;
                 monacoEditor.focus();
+            }
+        }
+
+        async function onZipExport() {
+            addToOutput('[System] Exportiere Projekt als ZIP...', 'system');
+            try {
+                const zipData = await runWorker('zipExport');
+                const blob = new Blob([zipData], { type: 'application/zip' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'workspace.zip';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                addToOutput('[System] Projekt erfolgreich exportiert.', 'system');
+            } catch (err) {
+                addToOutput(`[System] Fehler beim Exportieren: ${err.message}`, 'stderr');
             }
         }
 
@@ -498,13 +533,8 @@
             installPackageBtn.textContent = '...';
 
             try {
-                await pyodide.runPythonAsync(`
-                    import micropip
-                    await micropip.install('${packageName}')
-                `);
+                await runWorker('installPackage', { packageName });
                 addToOutput(`[System] Package '${packageName}' installed successfully.`, 'system');
-                // Attempt to import the package to confirm installation
-                pyodide.pyimport(packageName);
                 addToOutput(`[System] '${packageName}' can now be imported.`, 'system');
             } catch (err) {
                 addToOutput(`[System] Error installing '${packageName}': ${err.message}`, 'stderr');
@@ -523,10 +553,7 @@
             monacoEditor.updateOptions({ readOnly: true });
 
             try {
-                let result = await pyodide.runPythonAsync(codeBuffer);
-                if (result !== undefined) {
-                    addToOutput(pyodide.globals.get('repr')(result), 'repr');
-                }
+                await runWorker('run', { code: codeBuffer });
                 codeBuffer = "";
                 promptElement.textContent = ">>>\u00A0";
             } catch (err) {
@@ -550,6 +577,31 @@
         // --- Monaco Editor Initialization ---
         require.config({ paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs' }});
         require(['vs/editor/editor.main'], function() {
+
+            monaco.languages.registerCompletionItemProvider('python', {
+                triggerCharacters: ['.'],
+                provideCompletionItems: async function(model, position) {
+                    const code = model.getValue();
+                    const line = position.lineNumber;
+                    const column = position.column - 1; // Jedi uses 0-based columns
+
+                    try {
+                        const completions = await runWorker('autocomplete', { code, line, column });
+                        return {
+                            suggestions: completions.map(c => ({
+                                label: c.label,
+                                kind: c.kind, // Needs correct mapping, falling back to basic if needed.
+                                insertText: c.insertText,
+                                documentation: c.documentation
+                            }))
+                        };
+                    } catch (e) {
+                        console.error('Autocomplete error:', e);
+                        return { suggestions: [] };
+                    }
+                }
+            });
+
             monacoEditor = monaco.editor.create(editorContainer, {
                 language: 'python',
                 theme: 'vs-dark',
