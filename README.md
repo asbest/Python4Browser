@@ -1,6 +1,6 @@
 # Python4Browser
 
-Demo:
+Web App:
 https://asbest.github.io/Python4Browser/Python4Browser.html
 
 Please support me on Patreon: https://www.patreon.com/posts/populate-155676276?utm_medium=clipboard_copy&utm_source=copyLink&utm_campaign=postshare_creator&utm_content=join_link
