@@ -5,7 +5,7 @@ https://asbest.github.io/Python4Browser/Python4Browser.html
 
 Please support me on Patreon: https://www.patreon.com/posts/populate-155676276?utm_medium=clipboard_copy&utm_source=copyLink&utm_campaign=postshare_creator&utm_content=join_link
 
-Simple LLM Chat interface for Browser (best with Edge):
+Additional: Simple LLM Chat interface running in Browser with embedded WebLLM (best with Edge):
 https://asbest.github.io/Python4Browser/LMM4Browser.html
 
 🐍 Full Python Runtime - Complete CPython environment powered by Pyodide and WebAssembly
