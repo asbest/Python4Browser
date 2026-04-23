@@ -5,6 +5,13 @@ https://asbest.github.io/Python4Browser/Python4Browser.html
 
 Please support me on Patreon: https://www.patreon.com/posts/populate-155676276?utm_medium=clipboard_copy&utm_source=copyLink&utm_campaign=postshare_creator&utm_content=join_link
 
+🐍 Full Python Runtime - Complete CPython environment powered by Pyodide and WebAssembly
+📦 Pre-loaded Libraries - pandas, numpy, and networkx ready to use out of the box
+⚡ Zero Setup - No Python installation, pip, or virtual environments needed
+🔒 Secure & Sandboxed - All code runs safely within the browser's security sandbox
+📄 Single File - The entire application is one portable HTML file
+🌐 Universal Access - Works on any modern web browser (Chrome, Firefox, Safari, Edge)
+
 Interactive Python Console in the Browser
 This project is a
 fully-featured, interactive Python console (REPL—Read-Eval-Print Loop) that runs entirely in your web browser. It is encapsulated in a single HTML file and requires no server-side backend or local dependencies.
@@ -18,6 +25,8 @@ Key Advantages
    * networkx (for graph theory)
  * Instant Access: Ideal for quick prototyping, teaching or learning Python, or for use in environments where software installation is restricted (e.g., on tablets, Chromebooks, or locked-down corporate devices).
  * Secure (Sandboxed): All code runs within the browser's security sandbox, with no direct access to the user's local file system.
+
+
 How to Use
  * Save the html file.
  * Open the file in any modern web browser (e.g., Chrome, Firefox, Safari, Edge).
