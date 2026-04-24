@@ -130,7 +130,9 @@
                 <button id="stop-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg transition-colors hidden disabled:opacity-50 disabled:cursor-not-allowed" title="Stop generation">
                     Stop
                 </button>
-                <button id="send-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>\n                    Send\n                </button>
+                <button id="send-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                    Send
+                </button>
             </div>
         </div>
     </main>
@@ -208,10 +210,10 @@
             }
 
             if (maxContext) {
-                contextSizeInput.max = maxContext;
-                contextSizeInput.title = `Maximum: ${maxContext}`;
+                contextSizeInput.placeholder = maxContext;
+                contextSizeInput.title = `Default: ${maxContext}`;
             } else {
-                contextSizeInput.removeAttribute('max');
+                contextSizeInput.placeholder = "Auto";
                 contextSizeInput.removeAttribute('title');
             }
         }
@@ -221,16 +223,6 @@
         if (availableModels.length > 0) {
             updateContextSizeMax();
         }
-
-        contextSizeInput.addEventListener('input', () => {
-            if (contextSizeInput.max) {
-                const max = parseInt(contextSizeInput.max);
-                const val = parseInt(contextSizeInput.value);
-                if (val > max) {
-                    contextSizeInput.value = max;
-                }
-            }
-        });
 
         // --- Save / Load Chat ---
         saveChatBtn.addEventListener('click', () => {
