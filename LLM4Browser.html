@@ -69,12 +69,27 @@
 </head>
 <body class="bg-gray-900 text-gray-100 flex flex-col h-screen overflow-hidden">
     <!-- Header -->
-    <header class="bg-gray-800 border-b border-gray-700 p-4 flex justify-between items-center">
-        <h1 class="text-xl font-bold text-white">LLM4Browser</h1>
-        <div class="flex items-center space-x-4">
-            <button id="save-chat-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded transition-colors text-sm" title="Save Chat">
-                💾 Save
+    <header class="bg-gray-800 border-b border-gray-700 p-4 flex justify-between items-center z-20">
+        <div class="flex items-center space-x-2">
+            <button id="sidebar-toggle-btn" class="text-gray-300 hover:text-white p-2 rounded hover:bg-gray-700 transition-colors" title="Toggle Sidebar">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
             </button>
+            <h1 class="text-xl font-bold text-white">LLM4Browser</h1>
+        </div>
+        <div class="flex items-center space-x-4">
+            <button id="settings-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded transition-colors text-sm" title="Settings">
+                ⚙️ Settings
+            </button>
+            <div class="flex items-center space-x-2 border-r border-gray-600 pr-4 mr-2">
+                <button id="save-chat-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded transition-colors text-sm" title="Save Chat as JSON">
+                    💾 JSON
+                </button>
+                <button id="export-md-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded transition-colors text-sm" title="Export Chat as Markdown">
+                    📄 MD
+                </button>
+            </div>
             <label for="load-chat-input" class="cursor-pointer bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded transition-colors text-sm" title="Load Chat">
                 📂 Load
             </label>
@@ -92,8 +107,56 @@
         </div>
     </header>
 
+    <div class="flex-grow flex overflow-hidden">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="w-64 bg-gray-800 border-r border-gray-700 flex flex-col transition-all duration-300 overflow-hidden hidden sm:flex">
+            <div class="p-4 border-b border-gray-700">
+                <button id="new-chat-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors flex items-center justify-center space-x-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+                    </svg>
+                    <span>New Chat</span>
+                </button>
+            </div>
+            <div id="chat-list" class="flex-grow overflow-y-auto p-2 space-y-2">
+                <!-- Chat sessions will be appended here -->
+            </div>
+        </aside>
+
     <!-- Main -->
     <main class="flex-grow flex flex-col p-4 overflow-hidden relative max-w-4xl w-full mx-auto">
+        <!-- Settings Modal -->
+        <div id="settings-modal" class="hidden absolute top-0 left-0 w-full h-full bg-gray-900 bg-opacity-75 z-30 flex items-center justify-center p-4">
+            <div class="bg-gray-800 border border-gray-700 rounded-lg p-6 w-full max-w-lg shadow-xl relative flex flex-col max-h-full">
+                <h2 class="text-xl font-bold text-white mb-4">Settings</h2>
+                <div class="space-y-4 overflow-y-auto flex-grow pr-2">
+                    <div>
+                        <label class="block text-sm text-gray-300 mb-1">System Prompt</label>
+                        <textarea id="sys-prompt-input" rows="3" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-sm text-white focus:outline-none"></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-300 mb-1">Temperature (<span id="temp-val">1.0</span>)</label>
+                        <input type="range" id="temp-input" min="0" max="2" step="0.1" value="1.0" class="w-full">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-300 mb-1">Top-P (<span id="top-p-val">1.0</span>)</label>
+                        <input type="range" id="top-p-input" min="0" max="1" step="0.05" value="1.0" class="w-full">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-300 mb-1">Repetition Penalty (<span id="rep-pen-val">1.0</span>)</label>
+                        <input type="range" id="rep-pen-input" min="1" max="2" step="0.05" value="1.0" class="w-full">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-300 mb-1">Max Tokens</label>
+                        <input type="number" id="max-tokens-input" placeholder="e.g. 1024" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-sm text-white focus:outline-none">
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-end">
+                    <button id="close-settings-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Close</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Progress -->
         <div id="progress-container" class="absolute top-4 left-1/2 transform -translate-x-1/2 w-full max-w-md bg-gray-800 border border-gray-700 rounded-lg p-4 shadow-lg hidden z-10">
             <p id="progress-text" class="text-sm text-center mb-2">Loading Model...</p>
@@ -126,6 +189,9 @@
                         <path fill-rule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clip-rule="evenodd" />
                     </svg>
                 </button>
+                <button id="mic-btn" class="bg-gray-600 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center" disabled title="Dictate">
+                    🎙️
+                </button>
                 <textarea id="user-input" rows="1" class="flex-grow bg-gray-800 border border-gray-700 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none overflow-hidden" placeholder="Type a message..." disabled></textarea>
                 <button id="stop-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg transition-colors hidden disabled:opacity-50 disabled:cursor-not-allowed" title="Stop generation">
                     Stop
@@ -136,6 +202,7 @@
             </div>
         </div>
     </main>
+    </div>
 
     <script type="module">
         import { CreateMLCEngine, prebuiltAppConfig } from "https://esm.run/@mlc-ai/web-llm";
@@ -149,6 +216,7 @@
         const userInput = document.getElementById('user-input');
         const sendBtn = document.getElementById('send-btn');
         const saveChatBtn = document.getElementById('save-chat-btn');
+        const exportMdBtn = document.getElementById('export-md-btn');
         const loadChatInput = document.getElementById('load-chat-input');
         const attachBtn = document.getElementById('attach-btn');
         const attachFileInput = document.getElementById('attach-file-input');
@@ -156,10 +224,37 @@
         const attachmentFilename = document.getElementById('attachment-filename');
         const removeAttachmentBtn = document.getElementById('remove-attachment-btn');
         const stopBtn = document.getElementById('stop-btn');
+        const micBtn = document.getElementById('mic-btn');
         const contextSizeInput = document.getElementById('context-size-input');
+        const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
+        const sidebar = document.getElementById('sidebar');
+        const newChatBtn = document.getElementById('new-chat-btn');
+        const chatList = document.getElementById('chat-list');
+        const settingsBtn = document.getElementById('settings-btn');
+        const settingsModal = document.getElementById('settings-modal');
+        const closeSettingsBtn = document.getElementById('close-settings-btn');
+        const sysPromptInput = document.getElementById('sys-prompt-input');
+        const tempInput = document.getElementById('temp-input');
+        const tempVal = document.getElementById('temp-val');
+        const topPInput = document.getElementById('top-p-input');
+        const topPVal = document.getElementById('top-p-val');
+        const repPenInput = document.getElementById('rep-pen-input');
+        const repPenVal = document.getElementById('rep-pen-val');
+        const maxTokensInput = document.getElementById('max-tokens-input');
+
+        let appSettings = JSON.parse(localStorage.getItem('LLM4BrowserSettings')) || {
+            sysPrompt: "You are a helpful AI assistant.",
+            temperature: 1.0,
+            top_p: 1.0,
+            repetition_penalty: 1.0,
+            max_tokens: null,
+            selectedModel: null,
+            contextSize: null
+        };
 
         let engine = null;
         let attachedFileName = null;
+        let currentChatId = Date.now().toString();
         let attachedFileContent = null;
         // Enforce High-Performance GPU if possible
         if (navigator.gpu) {
@@ -171,8 +266,164 @@
         }
 
         let messages = [
-            { role: "system", content: "You are a helpful AI assistant." }
+            { role: "system", content: appSettings.sysPrompt }
         ];
+
+        // --- Sidebar & DB Management ---
+        sidebarToggleBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('hidden');
+        });
+
+        const dbName = 'LLM4BrowserDB';
+        const storeName = 'chats';
+
+        function openDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(dbName, 1);
+                request.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains(storeName)) {
+                        db.createObjectStore(storeName, { keyPath: 'id' });
+                    }
+                };
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        async function saveChatSession() {
+            if (messages.length <= 1) return; // Don't save empty chats
+            const titleMsg = messages.find(m => m.role === 'user');
+            const title = titleMsg ? titleMsg.content.substring(0, 30) + '...' : 'New Chat';
+            const chatObj = { id: currentChatId, title, messages, updatedAt: Date.now() };
+
+            const db = await openDB();
+            const tx = db.transaction(storeName, 'readwrite');
+            tx.objectStore(storeName).put(chatObj);
+            await new Promise(r => tx.oncomplete = r);
+            renderChatList();
+        }
+
+        async function loadChatSession(id) {
+            const db = await openDB();
+            const tx = db.transaction(storeName, 'readonly');
+            const store = tx.objectStore(storeName);
+            const request = store.get(id);
+
+            return new Promise((resolve) => {
+                request.onsuccess = () => {
+                    const data = request.result;
+                    if (data) {
+                        currentChatId = data.id;
+                        messages = data.messages;
+                        chatContainer.innerHTML = '';
+                        messages.forEach((msg, idx) => {
+                            if (msg.role !== 'system') addMessage(msg.role, msg.content, idx);
+                        });
+                        addMessage('system', 'Chat session loaded.');
+                        if (window.innerWidth < 640) sidebar.classList.add('hidden');
+                    }
+                    resolve();
+                };
+            });
+        }
+
+        async function deleteChatSession(id) {
+            const db = await openDB();
+            const tx = db.transaction(storeName, 'readwrite');
+            tx.objectStore(storeName).delete(id);
+            await new Promise(r => tx.oncomplete = r);
+            if (currentChatId === id) {
+                newChat();
+            }
+            renderChatList();
+        }
+
+        async function renderChatList() {
+            chatList.innerHTML = '';
+            const db = await openDB();
+            const tx = db.transaction(storeName, 'readonly');
+            const store = tx.objectStore(storeName);
+            const request = store.getAll();
+
+            request.onsuccess = () => {
+                const chats = request.result.sort((a, b) => b.updatedAt - a.updatedAt);
+                chats.forEach(chat => {
+                    const div = document.createElement('div');
+                    div.className = `p-2 rounded cursor-pointer flex justify-between items-center group transition-colors ${chat.id === currentChatId ? 'bg-gray-700' : 'hover:bg-gray-700'}`;
+
+                    const titleSpan = document.createElement('span');
+                    titleSpan.className = 'truncate text-sm text-gray-300 group-hover:text-white flex-grow';
+                    titleSpan.textContent = chat.title;
+                    titleSpan.onclick = () => loadChatSession(chat.id);
+
+                    const delBtn = document.createElement('button');
+                    delBtn.className = 'text-red-400 opacity-0 group-hover:opacity-100 px-2 py-1 text-xs transition-opacity';
+                    delBtn.innerHTML = '🗑️';
+                    delBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        deleteChatSession(chat.id);
+                    };
+
+                    div.appendChild(titleSpan);
+                    div.appendChild(delBtn);
+                    chatList.appendChild(div);
+                });
+            };
+        }
+
+        function newChat() {
+            currentChatId = Date.now().toString();
+            messages = [{ role: "system", content: appSettings.sysPrompt }];
+            chatContainer.innerHTML = '';
+            addMessage('system', 'Started a new chat.');
+            renderChatList();
+            if (window.innerWidth < 640) sidebar.classList.add('hidden');
+        }
+
+        newChatBtn.addEventListener('click', newChat);
+
+        // Initial render
+        renderChatList();
+
+
+        // --- Settings Persistence ---
+        function saveSettings() {
+            appSettings.sysPrompt = sysPromptInput.value;
+            appSettings.temperature = parseFloat(tempInput.value);
+            appSettings.top_p = parseFloat(topPInput.value);
+            appSettings.repetition_penalty = parseFloat(repPenInput.value);
+            appSettings.max_tokens = maxTokensInput.value ? parseInt(maxTokensInput.value) : null;
+            appSettings.selectedModel = modelSelector.value;
+            appSettings.contextSize = contextSizeInput.value ? parseInt(contextSizeInput.value) : null;
+            localStorage.setItem('LLM4BrowserSettings', JSON.stringify(appSettings));
+
+            // update system prompt in current chat if it is a new chat
+            if (messages.length === 1 && messages[0].role === 'system') {
+                messages[0].content = appSettings.sysPrompt;
+            }
+        }
+
+        settingsBtn.addEventListener('click', () => {
+            sysPromptInput.value = appSettings.sysPrompt;
+            tempInput.value = appSettings.temperature;
+            tempVal.textContent = appSettings.temperature.toFixed(1);
+            topPInput.value = appSettings.top_p;
+            topPVal.textContent = appSettings.top_p.toFixed(2);
+            repPenInput.value = appSettings.repetition_penalty;
+            repPenVal.textContent = appSettings.repetition_penalty.toFixed(2);
+            maxTokensInput.value = appSettings.max_tokens || '';
+            settingsModal.classList.remove('hidden');
+        });
+
+        closeSettingsBtn.addEventListener('click', () => {
+            saveSettings();
+            settingsModal.classList.add('hidden');
+        });
+
+        tempInput.addEventListener('input', () => tempVal.textContent = parseFloat(tempInput.value).toFixed(1));
+        topPInput.addEventListener('input', () => topPVal.textContent = parseFloat(topPInput.value).toFixed(2));
+        repPenInput.addEventListener('input', () => repPenVal.textContent = parseFloat(repPenInput.value).toFixed(2));
 
 
         // Dynamically load models at startup
@@ -184,6 +435,13 @@
             option.textContent = modelId;
             modelSelector.appendChild(option);
         });
+
+        if (appSettings.selectedModel) {
+            modelSelector.value = appSettings.selectedModel;
+        }
+        if (appSettings.contextSize) {
+            contextSizeInput.value = appSettings.contextSize;
+        }
 
         async function updateContextSizeMax() {
             const selectedModelId = modelSelector.value;
@@ -224,12 +482,33 @@
             updateContextSizeMax();
         }
 
-        // --- Save / Load Chat ---
+        // --- Save / Load / Export Chat ---
         saveChatBtn.addEventListener('click', () => {
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(messages));
             const downloadAnchorNode = document.createElement('a');
             downloadAnchorNode.setAttribute("href",     dataStr);
             downloadAnchorNode.setAttribute("download", "chat_history.json");
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        });
+
+        exportMdBtn.addEventListener('click', () => {
+            let mdContent = "# LLM4Browser Chat Export\n\n";
+            messages.forEach(msg => {
+                if (msg.role === 'system') {
+                    mdContent += `> **System:** ${msg.content}\n\n`;
+                } else if (msg.role === 'user') {
+                    mdContent += `**User:**\n${msg.content}\n\n`;
+                } else if (msg.role === 'assistant') {
+                    mdContent += `**Assistant:**\n${msg.content}\n\n`;
+                }
+            });
+
+            const dataStr = "data:text/markdown;charset=utf-8," + encodeURIComponent(mdContent);
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "chat_export.md");
             document.body.appendChild(downloadAnchorNode);
             downloadAnchorNode.click();
             downloadAnchorNode.remove();
@@ -250,9 +529,9 @@
                         chatContainer.innerHTML = '';
 
                         // Re-render messages
-                        messages.forEach(msg => {
+                        messages.forEach((msg, idx) => {
                             if (msg.role !== 'system') { // skip default system prompt for visual clutter
-                                addMessage(msg.role, msg.content);
+                                addMessage(msg.role, msg.content, idx);
                             }
                         });
                         addMessage('system', 'Chat loaded successfully.');
@@ -299,20 +578,69 @@
 
         removeAttachmentBtn.addEventListener('click', clearAttachment);
 
+        // --- Speech Recognition ---
+        let recognition = null;
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            recognition.lang = 'en-US';
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                userInput.value += (userInput.value ? ' ' : '') + transcript;
+                userInput.style.height = 'auto';
+                userInput.style.height = (userInput.scrollHeight) + 'px';
+            };
+
+            recognition.onerror = (event) => {
+                console.error("Speech recognition error", event.error);
+                micBtn.classList.remove('bg-red-600', 'animate-pulse');
+                micBtn.classList.add('bg-gray-600');
+            };
+
+            recognition.onend = () => {
+                micBtn.classList.remove('bg-red-600', 'animate-pulse');
+                micBtn.classList.add('bg-gray-600');
+            };
+        } else {
+            micBtn.title = "Speech recognition not supported in this browser.";
+        }
+
+        micBtn.addEventListener('click', () => {
+            if (recognition) {
+                if (micBtn.classList.contains('bg-red-600')) {
+                    recognition.stop();
+                } else {
+                    recognition.start();
+                    micBtn.classList.remove('bg-gray-600');
+                    micBtn.classList.add('bg-red-600', 'animate-pulse');
+                }
+            }
+        });
+
         stopBtn.addEventListener('click', () => {
             if (engine) {
                 engine.interruptGenerate();
             }
         });
 
+        modelSelector.addEventListener('change', () => {
+            updateContextSizeMax();
+            saveSettings();
+        });
+        contextSizeInput.addEventListener('input', saveSettings);
+
         loadBtn.addEventListener('click', async () => {
             const selectedModel = modelSelector.value;
+            saveSettings();
             loadBtn.disabled = true;
             modelSelector.disabled = true;
             contextSizeInput.disabled = true;
             progressContainer.classList.remove('hidden');
             chatContainer.innerHTML = '';
-            messages = [{ role: "system", content: "You are a helpful AI assistant." }];
+            messages = [{ role: "system", content: appSettings.sysPrompt }];
 
             const initProgressCallback = (progress) => {
                 progressText.textContent = progress.text;
@@ -334,6 +662,7 @@
                 userInput.disabled = false;
                 sendBtn.disabled = false;
                 attachBtn.disabled = false;
+                micBtn.disabled = false;
                 userInput.focus();
             } catch (err) {
                 progressText.textContent = `Error: ${err.message}`;
@@ -345,55 +674,157 @@
             }
         });
 
-        function addMessage(role, content) {
+        function addMessage(role, content, index = null) {
+            const msgContainer = document.createElement('div');
+            msgContainer.className = `flex flex-col group w-full ${role === 'user' ? 'items-end' : role === 'system' ? 'items-center' : 'items-start'}`;
+
             const msgDiv = document.createElement('div');
 
             if (role === 'user') {
-                msgDiv.className = 'p-3 rounded-lg max-w-[80%] bg-blue-600 ml-auto text-white prose prose-invert break-words';
+                msgDiv.className = 'p-3 rounded-lg max-w-[80%] bg-blue-600 text-white prose prose-invert break-words';
             } else if (role === 'system') {
-                msgDiv.className = 'p-3 rounded-lg bg-gray-700 text-center mx-auto text-gray-400 text-sm prose prose-invert break-words';
+                msgDiv.className = 'p-3 rounded-lg bg-gray-700 text-gray-400 text-sm prose prose-invert break-words text-center';
             } else {
-                msgDiv.className = 'p-3 rounded-lg max-w-[80%] bg-gray-700 mr-auto text-gray-100 prose prose-invert break-words';
+                msgDiv.className = 'p-3 rounded-lg max-w-[80%] bg-gray-700 text-gray-100 prose prose-invert break-words relative';
             }
 
             msgDiv.innerHTML = marked.parse(content);
-            chatContainer.appendChild(msgDiv);
+            msgContainer.appendChild(msgDiv);
+
+            // Action Bar
+            if (role !== 'system') {
+                const actionBar = document.createElement('div');
+                actionBar.className = `opacity-0 group-hover:opacity-100 transition-opacity flex space-x-2 mt-1 text-xs text-gray-400 ${role === 'user' ? 'mr-1' : 'ml-1'}`;
+
+                // Copy Button
+                const copyBtn = document.createElement('button');
+                copyBtn.textContent = '📋 Copy';
+                copyBtn.className = 'hover:text-white transition-colors';
+                copyBtn.onclick = () => {
+                    navigator.clipboard.writeText(content).then(() => {
+                        copyBtn.textContent = '✅ Copied';
+                        setTimeout(() => copyBtn.textContent = '📋 Copy', 2000);
+                    });
+                };
+                actionBar.appendChild(copyBtn);
+
+                if (role === 'assistant') {
+                    const speakBtn = document.createElement('button');
+                    speakBtn.textContent = '🔊 Read';
+                    speakBtn.className = 'hover:text-white transition-colors';
+                    speakBtn.onclick = () => {
+                        if ('speechSynthesis' in window) {
+                            if (window.speechSynthesis.speaking) {
+                                window.speechSynthesis.cancel();
+                            } else {
+                                const utterance = new SpeechSynthesisUtterance(content);
+                                window.speechSynthesis.speak(utterance);
+                            }
+                        } else {
+                            alert("Text-to-Speech not supported in this browser.");
+                        }
+                    };
+                    actionBar.appendChild(speakBtn);
+                }
+
+                if (role === 'user' && index !== null) {
+                    const editBtn = document.createElement('button');
+                    editBtn.textContent = '✏️ Edit';
+                    editBtn.className = 'hover:text-white transition-colors';
+                    editBtn.onclick = () => {
+                        const originalText = messages[index].content;
+                        // Determine the start of the attached file, if any
+                        let textToEdit = originalText;
+                        const match = originalText.match(/^Attached file '(.*?)':\n```\n([\s\S]*?)\n```\n\n/);
+                        if (match) {
+                           textToEdit = originalText.substring(match[0].length);
+                        }
+
+                        userInput.value = textToEdit;
+                        userInput.focus();
+                        userInput.style.height = 'auto';
+                        userInput.style.height = (userInput.scrollHeight) + 'px';
+
+                        // Truncate messages array
+                        messages = messages.slice(0, index);
+
+                        // Re-render chat
+                        chatContainer.innerHTML = '';
+                        messages.forEach((msg, idx) => {
+                            if (msg.role !== 'system') addMessage(msg.role, msg.content, idx);
+                        });
+                        saveChatSession();
+                    };
+                    actionBar.appendChild(editBtn);
+                }
+
+                if (role === 'assistant' && (index === messages.length - 1 || index === messages.length) && index !== null) {
+                    const regenBtn = document.createElement('button');
+                    regenBtn.textContent = '🔄 Regenerate';
+                    regenBtn.className = 'hover:text-white transition-colors';
+                    regenBtn.onclick = () => {
+                        messages.pop(); // remove last assistant message
+                        msgContainer.remove(); // remove it from UI
+                        saveChatSession();
+                        handleSend(true); // trigger send again without new input
+                    };
+                    actionBar.appendChild(regenBtn);
+                }
+
+                msgContainer.appendChild(actionBar);
+            }
+
+            chatContainer.appendChild(msgContainer);
             chatContainer.scrollTop = chatContainer.scrollHeight;
-            return msgDiv;
+            return msgDiv; // return the inner div for streaming updates
         }
 
-        async function handleSend() {
-            const text = userInput.value.trim();
-            if ((!text && !attachedFileContent) || !engine) return;
+        async function handleSend(isRegenerate = false) {
+            let text = userInput.value.trim();
+            if (!isRegenerate && (!text && !attachedFileContent)) return;
+            if (!engine) return;
 
-            userInput.value = '';
-            userInput.style.height = 'auto'; // reset height
-            userInput.disabled = true;
+            if (!isRegenerate) {
+                userInput.value = '';
+                userInput.style.height = 'auto'; // reset height
+                userInput.disabled = true;
+
+                let messageContent = text;
+                let displayContent = text;
+
+                if (attachedFileContent) {
+                    const fileContext = `Attached file '${attachedFileName}':\n\`\`\`\n${attachedFileContent}\n\`\`\`\n\n`;
+                    messageContent = fileContext + text;
+                    displayContent = `*(Attached file: ${attachedFileName})*\n\n` + text;
+                }
+
+                messages.push({ role: "user", content: messageContent });
+                addMessage("user", displayContent, messages.length - 1);
+                clearAttachment();
+            } else {
+                userInput.disabled = true;
+            }
+
             sendBtn.classList.add('hidden');
             stopBtn.classList.remove('hidden');
             attachBtn.disabled = true;
 
-            let messageContent = text;
-            let displayContent = text;
-
-            if (attachedFileContent) {
-                const fileContext = `Attached file '${attachedFileName}':\n\`\`\`\n${attachedFileContent}\n\`\`\`\n\n`;
-                messageContent = fileContext + text;
-                displayContent = `*(Attached file: ${attachedFileName})*\n\n` + text;
-            }
-
-            addMessage("user", displayContent);
-            messages.push({ role: "user", content: messageContent });
-
-            clearAttachment();
-
-            const replyDiv = addMessage("assistant", "");
+            const assistantIndex = messages.length;
+            const replyDiv = addMessage("assistant", "", assistantIndex);
 
             try {
-                const chunks = await engine.chat.completions.create({
+                const chatOpts = {
                     messages,
                     stream: true,
-                });
+                    temperature: appSettings.temperature,
+                    top_p: appSettings.top_p,
+                    repetition_penalty: appSettings.repetition_penalty,
+                };
+                if (appSettings.max_tokens) {
+                    chatOpts.max_tokens = appSettings.max_tokens;
+                }
+
+                const chunks = await engine.chat.completions.create(chatOpts);
 
                 let replyText = "";
                 for await (const chunk of chunks) {
@@ -403,6 +834,7 @@
                 }
 
                 messages.push({ role: "assistant", content: replyText });
+                saveChatSession();
             } catch (err) {
                 if (err.message.includes("interrupt")) {
                     replyDiv.textContent += "\n\n*(Generation aborted)*";
