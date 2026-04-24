@@ -1,6 +1,22 @@
 importScripts('https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js');
 
 let pyodide;
+let llmEngine = null;
+
+
+// Enforce High-Performance GPU if possible
+if (self.navigator && self.navigator.gpu) {
+    const originalRequestAdapter = self.navigator.gpu.requestAdapter.bind(self.navigator.gpu);
+    self.navigator.gpu.requestAdapter = async function(options) {
+        const newOptions = Object.assign({}, options, { powerPreference: "high-performance" });
+        return originalRequestAdapter(newOptions);
+    };
+}
+
+// Helper to dynamically load WebLLM from ES Module
+async function getWebLLM() {
+    return await import("https://esm.run/@mlc-ai/web-llm");
+}
 
 self.onmessage = async (e) => {
     const { id, type, payload } = e.data;
@@ -54,12 +70,78 @@ self.onmessage = async (e) => {
 
                     plt.show = _show_patch
 
+                    # Expose a Python module to interact with WebLLM
+                    class BrowserLLM:
+                        @staticmethod
+                        def load_model(model_id="Llama-3.2-1B-Instruct-q4f16_1-MLC"):
+                            import js
+                            print(f"Loading LLM {model_id} via WebGPU (this may take a while)...")
+                            # We can use js.postMessage to communicate with the worker itself, but
+                            # since we are IN the worker, we can directly call JS functions exposed to global.
+                            # Better approach: We dispatch a command to our own worker message loop
+                            # or just execute it directly if we map a JS async function to global.
+                            pass
+
+                    sys.modules['browser_llm'] = BrowserLLM()
+
                     print("Pyodide initialized.")
                     print(f"Python version: {sys.version.split(' ')[0]}")
                     print("Available libraries: pandas (pd), numpy (np), networkx (nx), matplotlib.pyplot (plt)")
+                    print("Added 'browser_llm' to access local LLM. Try: import browser_llm; browser_llm.chat('Hello')")
                     print("Use the 'Upload Files' button to make local files available.")
                     print("--------------------------------------------------")
                 `);
+
+                // Expose JS functions directly to the global worker scope so 'import js' can access them
+                self._js_load_llm = async (modelId) => {
+                    if (llmEngine) {
+                        return "Model already loaded.";
+                    }
+                    try {
+                        const webllm = await getWebLLM();
+                        const initProgressCallback = (progress) => {
+                            // Can print progress to python stdout
+                            // console.log(progress);
+                        };
+                        llmEngine = await webllm.CreateMLCEngine(modelId, { initProgressCallback });
+                        return "LLM successfully loaded!";
+                    } catch (err) {
+                        return "Error loading LLM: " + err.message;
+                    }
+                };
+
+                self._js_ask_llm = async (prompt) => {
+                    if (!llmEngine) {
+                        throw new Error("LLM is not loaded. Call load_model() first.");
+                    }
+                    const messages = [{ role: "user", content: prompt }];
+                    const reply = await llmEngine.chat.completions.create({ messages });
+                    return reply.choices[0].message.content;
+                };
+
+                await pyodide.runPythonAsync(`
+                    import browser_llm
+                    import asyncio
+
+                    async def async_load(model_id="Llama-3.2-1B-Instruct-q4f16_1-MLC"):
+                        import js
+                        print(f"Loading {model_id}...")
+                        result = await js._js_load_llm(model_id)
+                        print(result)
+
+                    async def async_chat(prompt):
+                        import js
+                        try:
+                            result = await js._js_ask_llm(prompt)
+                            return result
+                        except Exception as e:
+                            print(e)
+                            return str(e)
+
+                    browser_llm.load_model = async_load
+                    browser_llm.chat = async_chat
+                `);
+
                 self.postMessage({ id, status: 'success' });
                 break;
 

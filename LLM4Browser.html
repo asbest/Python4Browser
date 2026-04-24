@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM in Browser</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Marked.js for Markdown parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        #chat-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        #chat-container::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+        #chat-container::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 4px;
+        }
+        #chat-container::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+        /* Markdown styles */
+        .prose pre {
+            background-color: #1f2937;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            border: 1px solid #374151;
+        }
+        .prose code {
+            background-color: #374151;
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-family: monospace;
+        }
+        .prose pre code {
+            background-color: transparent;
+            padding: 0;
+            border-radius: 0;
+            border: none;
+        }
+        .prose p {
+            margin-bottom: 0.75rem;
+        }
+        .prose p:last-child {
+            margin-bottom: 0;
+        }
+        .prose a {
+            color: #60a5fa;
+            text-decoration: underline;
+        }
+        .prose ul {
+            list-style-type: disc;
+            padding-left: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+        .prose ol {
+            list-style-type: decimal;
+            padding-left: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 flex flex-col h-screen overflow-hidden">
+    <!-- Header -->
+    <header class="bg-gray-800 border-b border-gray-700 p-4 flex justify-between items-center">
+        <h1 class="text-xl font-bold text-white">LLM4Browser</h1>
+        <div class="flex items-center space-x-4">
+            <button id="save-chat-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded transition-colors text-sm" title="Save Chat">
+                💾 Save
+            </button>
+            <label for="load-chat-input" class="cursor-pointer bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded transition-colors text-sm" title="Load Chat">
+                📂 Load
+            </label>
+            <input type="file" id="load-chat-input" class="hidden" accept=".json">
+            <select id="model-selector" class="bg-gray-700 text-white rounded p-2 text-sm focus:outline-none">
+                <option value="">Loading models...</option>
+            </select>
+            <button id="load-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors text-sm">
+                Load Model
+            </button>
+        </div>
+    </header>
+
+    <!-- Main -->
+    <main class="flex-grow flex flex-col p-4 overflow-hidden relative max-w-4xl w-full mx-auto">
+        <!-- Progress -->
+        <div id="progress-container" class="absolute top-4 left-1/2 transform -translate-x-1/2 w-full max-w-md bg-gray-800 border border-gray-700 rounded-lg p-4 shadow-lg hidden z-10">
+            <p id="progress-text" class="text-sm text-center mb-2">Loading Model...</p>
+            <div class="w-full bg-gray-700 rounded-full h-2.5">
+                <div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <!-- Chat Container -->
+        <div id="chat-container" class="flex-grow overflow-y-auto mb-4 bg-gray-800 rounded-lg p-4 border border-gray-700 space-y-4 flex flex-col">
+            <div class="text-center text-gray-400 mt-4">
+                Select a model and click "Load Model" to begin. (The first download may take some time)
+            </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="flex items-end space-x-2">
+            <textarea id="user-input" rows="1" class="flex-grow bg-gray-800 border border-gray-700 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none overflow-hidden" placeholder="Type a message..." disabled></textarea>
+            <button id="send-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                Send
+            </button>
+        </div>
+    </main>
+
+    <script type="module">
+        import { CreateMLCEngine, prebuiltAppConfig } from "https://esm.run/@mlc-ai/web-llm";
+
+        const loadBtn = document.getElementById('load-btn');
+        const modelSelector = document.getElementById('model-selector');
+        const progressContainer = document.getElementById('progress-container');
+        const progressText = document.getElementById('progress-text');
+        const progressBar = document.getElementById('progress-bar');
+        const chatContainer = document.getElementById('chat-container');
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+        const saveChatBtn = document.getElementById('save-chat-btn');
+        const loadChatInput = document.getElementById('load-chat-input');
+
+        let engine = null;
+        // Enforce High-Performance GPU if possible
+        if (navigator.gpu) {
+            const originalRequestAdapter = navigator.gpu.requestAdapter.bind(navigator.gpu);
+            navigator.gpu.requestAdapter = async function(options) {
+                const newOptions = Object.assign({}, options, { powerPreference: "high-performance" });
+                return originalRequestAdapter(newOptions);
+            };
+        }
+
+        let messages = [
+            { role: "system", content: "You are a helpful AI assistant." }
+        ];
+
+
+        // Dynamisch Modelle beim Start laden
+        const availableModels = prebuiltAppConfig.model_list.map(m => m.model_id);
+        modelSelector.innerHTML = ''; // Leeren
+        availableModels.forEach(modelId => {
+            const option = document.createElement('option');
+            option.value = modelId;
+            option.textContent = modelId;
+            modelSelector.appendChild(option);
+        });
+
+        // --- Save / Load Chat ---
+        saveChatBtn.addEventListener('click', () => {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(messages));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href",     dataStr);
+            downloadAnchorNode.setAttribute("download", "chat_history.json");
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        });
+
+        loadChatInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const loadedMessages = JSON.parse(event.target.result);
+                    if (Array.isArray(loadedMessages)) {
+                        messages = loadedMessages;
+
+                        // Clear the chat container
+                        chatContainer.innerHTML = '';
+
+                        // Re-render messages
+                        messages.forEach(msg => {
+                            if (msg.role !== 'system') { // skip default system prompt for visual clutter
+                                addMessage(msg.role, msg.content);
+                            }
+                        });
+                        addMessage('system', 'Chat loaded successfully.');
+                    } else {
+                        addMessage('system', 'Error: Invalid file format.');
+                    }
+                } catch (err) {
+                    addMessage('system', 'Error loading file: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+
+            // Reset input so the same file can be loaded again if needed
+            e.target.value = null;
+        });
+
+        loadBtn.addEventListener('click', async () => {
+            const selectedModel = modelSelector.value;
+            loadBtn.disabled = true;
+            modelSelector.disabled = true;
+            progressContainer.classList.remove('hidden');
+            chatContainer.innerHTML = '';
+            messages = [{ role: "system", content: "You are a helpful AI assistant." }];
+
+            const initProgressCallback = (progress) => {
+                progressText.textContent = progress.text;
+                if (progress.progress !== undefined) {
+                    progressBar.style.width = `${progress.progress * 100}%`;
+                }
+            };
+
+            try {
+                engine = await CreateMLCEngine(selectedModel, { initProgressCallback });
+                progressContainer.classList.add('hidden');
+                addMessage("system", `Model ${selectedModel} loaded successfully! You can now chat.`);
+                userInput.disabled = false;
+                sendBtn.disabled = false;
+                userInput.focus();
+            } catch (err) {
+                progressText.textContent = `Error: ${err.message}`;
+                progressBar.classList.replace('bg-blue-600', 'bg-red-600');
+                progressBar.style.width = '100%';
+                loadBtn.disabled = false;
+                modelSelector.disabled = false;
+            }
+        });
+
+        function addMessage(role, content) {
+            const msgDiv = document.createElement('div');
+
+            if (role === 'user') {
+                msgDiv.className = 'p-3 rounded-lg max-w-[80%] bg-blue-600 ml-auto text-white prose prose-invert break-words';
+            } else if (role === 'system') {
+                msgDiv.className = 'p-3 rounded-lg bg-gray-700 text-center mx-auto text-gray-400 text-sm prose prose-invert break-words';
+            } else {
+                msgDiv.className = 'p-3 rounded-lg max-w-[80%] bg-gray-700 mr-auto text-gray-100 prose prose-invert break-words';
+            }
+
+            msgDiv.innerHTML = marked.parse(content);
+            chatContainer.appendChild(msgDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            return msgDiv;
+        }
+
+        async function handleSend() {
+            const text = userInput.value.trim();
+            if (!text || !engine) return;
+
+            userInput.value = '';
+            userInput.style.height = 'auto'; // reset height
+            userInput.disabled = true;
+            sendBtn.disabled = true;
+
+            addMessage("user", text);
+            messages.push({ role: "user", content: text });
+
+            const replyDiv = addMessage("assistant", "");
+
+            try {
+                const chunks = await engine.chat.completions.create({
+                    messages,
+                    stream: true,
+                });
+
+                let replyText = "";
+                for await (const chunk of chunks) {
+                    replyText += chunk.choices[0]?.delta.content || "";
+                    replyDiv.innerHTML = marked.parse(replyText);
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                }
+
+                messages.push({ role: "assistant", content: replyText });
+            } catch (err) {
+                replyDiv.textContent = `Error: ${err.message}`;
+                replyDiv.classList.add('text-red-400');
+            } finally {
+                userInput.disabled = false;
+                sendBtn.disabled = false;
+                userInput.focus();
+            }
+        }
+
+        sendBtn.addEventListener('click', handleSend);
+        userInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+            }
+        });
+
+        userInput.addEventListener('input', () => {
+            userInput.style.height = 'auto';
+            userInput.style.height = (userInput.scrollHeight) + 'px';
+            if (userInput.scrollHeight > 150) {
+                userInput.style.overflowY = 'auto';
+            } else {
+                userInput.style.overflowY = 'hidden';
+            }
+        });
+    </script>
+</body>
+</html>
