@@ -103,7 +103,7 @@
                 <input type="file" id="zip-uploader" class="hidden" accept=".zip">
 
                 <button id="export-zip-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded transition-colors w-full text-center block">
-                    Projekt export (ZIP)
+                    Export Project (ZIP)
                 </button>
 
                 <button id="save-history-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded transition-colors w-full text-center block">
@@ -456,7 +456,7 @@
             const file = event.target.files[0];
             if (!file) return;
 
-            addToOutput(`[System] Entpacke ZIP-Paket '${file.name}'...`, 'system');
+            addToOutput(`[System] Extracting ZIP package '${file.name}'...`, 'system');
 
             try {
                 const arrayBuffer = await file.arrayBuffer();
@@ -465,10 +465,10 @@
                 // Extract zip using pyodide.unpackArchive
                 await runWorker('unpackArchive', { data: data, format: 'zip' });
 
-                addToOutput(`[System] ZIP-Paket '${file.name}' erfolgreich entpackt.`, 'system');
+                addToOutput(`[System] ZIP-Paket '${file.name}' extracted successfully.`, 'system');
                 await renderFileList();
             } catch (err) {
-                addToOutput(`[System] Fehler beim Entpacken von '${file.name}': ${err.message}`, 'stderr');
+                addToOutput(`[System] Error extracting '${file.name}': ${err.message}`, 'stderr');
             } finally {
                 // Reset file input to allow reloading the same file
                 event.target.value = null;
@@ -477,7 +477,7 @@
         }
 
         async function onZipExport() {
-            addToOutput('[System] Exportiere Projekt als ZIP...', 'system');
+            addToOutput('[System] Exporting project as ZIP...', 'system');
             try {
                 const zipData = await runWorker('zipExport');
                 const blob = new Blob([zipData], { type: 'application/zip' });
@@ -489,9 +489,9 @@
                 a.click();
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
-                addToOutput('[System] Projekt erfolgreich exportiert.', 'system');
+                addToOutput('[System] Project exported successfully.', 'system');
             } catch (err) {
-                addToOutput(`[System] Fehler beim Exportieren: ${err.message}`, 'stderr');
+                addToOutput(`[System] Error exporting: ${err.message}`, 'stderr');
             }
         }
 

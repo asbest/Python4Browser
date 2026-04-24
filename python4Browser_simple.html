@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Python-Interpreter im Browser</title>
+    <title>Python Interpreter in Browser</title>
     <!-- 1. Tailwind CSS für das Styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     
@@ -38,7 +38,7 @@
     <!-- Ladeanzeige -->
     <div id="loading" class="flex-grow flex flex-col justify-center items-center">
         <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-400"></div>
-        <p id="loading-status" class="mt-4 text-lg text-gray-300">Pyodide (Python-Laufzeitumgebung) wird initialisiert...</p>
+        <p id="loading-status" class="mt-4 text-lg text-gray-300">Initializing Pyodide (Python runtime)...</p>
     </div>
 
     <!-- Hauptanwendung (zunächst ausgeblendet) -->
@@ -48,7 +48,7 @@
         <!-- Linke Spalte: Editor und Steuerung -->
         <div class="flex flex-col md:w-1/2 h-full">
             <div class="flex justify-between items-center mb-2">
-                <label for="code-editor" class="text-sm font-medium text-gray-300">Python Code-Editor</label>
+                <label for="code-editor" class="text-sm font-medium text-gray-300">Python Code Editor</label>
                 <div>
                     <label for="zip-uploader" class="cursor-pointer text-xs bg-purple-600 hover:bg-purple-700 text-white font-bold py-1 px-2 rounded transition-colors">
                         Upload package as ZIP
@@ -58,28 +58,28 @@
             </div>
             <textarea id="code-editor"
                 class="flex-grow bg-gray-800 border border-gray-700 rounded-lg p-4 font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Geben Sie Ihren Python-Code hier ein...
-Shift+Enter für eine neue Zeile.
-Enter zum Ausführen.
+                placeholder="Enter your Python code here...
+Shift+Enter for a new line.
+Enter to execute.
 
-# Testen Sie z.B.:
+# Try for example:
 # arr = np.array([1, 2, 3])
 # print(arr * 2)
 
-# Lokales KI-Modell nutzen:
+# Use local AI model:
 # import browser_llm
 # await browser_llm.load_model()
 # print(await browser_llm.chat('Hallo!'))
 "></textarea>
             <button id="run-btn"
                 class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-200 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
-                Code ausführen (Enter)
+                Run Code (Enter)
             </button>
         </div>
 
         <!-- Rechte Spalte: Ausgabe/Konsole -->
         <div class="flex flex-col md:w-1/2 h-full">
-            <label for="output-container" class="text-sm font-medium text-gray-300 mb-2">Ausgabe (REPL)</label>
+            <label for="output-container" class="text-sm font-medium text-gray-300 mb-2">Output (REPL)</label>
             <div id="output-container" class="flex-grow bg-gray-800 border border-gray-700 rounded-lg p-4 font-mono text-sm overflow-y-auto h-full">
                 <pre id="output" class="whitespace-pre-wrap break-words"></pre>
             </div>
@@ -150,7 +150,7 @@ Enter zum Ausführen.
                     }
                 };
 
-                loadingStatus.textContent = 'Initialisiere Pyodide im Worker...';
+                loadingStatus.textContent = 'Initializing Pyodide in worker...';
 
                 await runWorker('init');
 
@@ -176,7 +176,7 @@ Enter zum Ausführen.
                 });
 
             } catch (err) {
-                loadingStatus.textContent = 'Fehler beim Initialisieren von Pyodide.';
+                loadingStatus.textContent = 'Error initializing Pyodide.';
                 addToOutput(`[Startup Error] ${err.message}`, 'stderr');
             }
         }
@@ -194,7 +194,7 @@ Enter zum Ausführen.
             
             // Button deaktivieren während der Ausführung
             runButton.disabled = true;
-            runButton.textContent = 'Wird ausgeführt...';
+            runButton.textContent = 'Running...';
 
             try {
                 // Führe den Code asynchron aus
@@ -210,7 +210,7 @@ Enter zum Ausführen.
                 
                 // Button wieder aktivieren
                 runButton.disabled = false;
-                runButton.textContent = 'Code ausführen (Enter)';
+                runButton.textContent = 'Run Code (Enter)';
                 codeEditor.focus();
             }
         }
@@ -219,7 +219,7 @@ Enter zum Ausführen.
             const file = event.target.files[0];
             if (!file) return;
 
-            addToOutput(`[System] Entpacke ZIP-Paket '${file.name}'...\n`, 'stdout');
+            addToOutput(`[System] Extracting ZIP package '${file.name}'...\n`, 'stdout');
 
             try {
                 const arrayBuffer = await file.arrayBuffer();
@@ -228,9 +228,9 @@ Enter zum Ausführen.
                 // Extract zip using pyodide.unpackArchive
                 await runWorker('unpackArchive', { data: data, format: 'zip' });
 
-                addToOutput(`[System] ZIP-Paket '${file.name}' erfolgreich entpackt.\n`, 'stdout');
+                addToOutput(`[System] ZIP-Paket '${file.name}' extracted successfully.\n`, 'stdout');
             } catch (err) {
-                addToOutput(`[System] Fehler beim Entpacken von '${file.name}': ${err.message}\n`, 'stderr');
+                addToOutput(`[System] Error extracting '${file.name}': ${err.message}\n`, 'stderr');
             } finally {
                 // Reset file input
                 event.target.value = null;

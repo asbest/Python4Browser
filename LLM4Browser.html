@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LLM im Browser</title>
+    <title>LLM in Browser</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Marked.js for Markdown parsing -->
@@ -72,18 +72,18 @@
     <header class="bg-gray-800 border-b border-gray-700 p-4 flex justify-between items-center">
         <h1 class="text-xl font-bold text-white">LLM4Browser</h1>
         <div class="flex items-center space-x-4">
-            <button id="save-chat-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded transition-colors text-sm" title="Chat speichern">
-                💾 Speichern
+            <button id="save-chat-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded transition-colors text-sm" title="Save Chat">
+                💾 Save
             </button>
-            <label for="load-chat-input" class="cursor-pointer bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded transition-colors text-sm" title="Chat laden">
-                📂 Laden
+            <label for="load-chat-input" class="cursor-pointer bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded transition-colors text-sm" title="Load Chat">
+                📂 Load
             </label>
             <input type="file" id="load-chat-input" class="hidden" accept=".json">
             <select id="model-selector" class="bg-gray-700 text-white rounded p-2 text-sm focus:outline-none">
-                <option value="">Lade Modelle...</option>
+                <option value="">Loading models...</option>
             </select>
             <button id="load-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors text-sm">
-                Modell laden
+                Load Model
             </button>
         </div>
     </header>
@@ -92,7 +92,7 @@
     <main class="flex-grow flex flex-col p-4 overflow-hidden relative max-w-4xl w-full mx-auto">
         <!-- Progress -->
         <div id="progress-container" class="absolute top-4 left-1/2 transform -translate-x-1/2 w-full max-w-md bg-gray-800 border border-gray-700 rounded-lg p-4 shadow-lg hidden z-10">
-            <p id="progress-text" class="text-sm text-center mb-2">Lade Modell...</p>
+            <p id="progress-text" class="text-sm text-center mb-2">Loading Model...</p>
             <div class="w-full bg-gray-700 rounded-full h-2.5">
                 <div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
             </div>
@@ -101,15 +101,15 @@
         <!-- Chat Container -->
         <div id="chat-container" class="flex-grow overflow-y-auto mb-4 bg-gray-800 rounded-lg p-4 border border-gray-700 space-y-4 flex flex-col">
             <div class="text-center text-gray-400 mt-4">
-                Wählen Sie ein Modell und klicken Sie auf "Modell laden", um zu beginnen. (Der erste Download kann einige Zeit dauern)
+                Select a model and click "Load Model" to begin. (The first download may take some time)
             </div>
         </div>
 
         <!-- Input Area -->
         <div class="flex items-end space-x-2">
-            <textarea id="user-input" rows="1" class="flex-grow bg-gray-800 border border-gray-700 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none overflow-hidden" placeholder="Schreiben Sie eine Nachricht..." disabled></textarea>
+            <textarea id="user-input" rows="1" class="flex-grow bg-gray-800 border border-gray-700 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none overflow-hidden" placeholder="Type a message..." disabled></textarea>
             <button id="send-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                Senden
+                Send
             </button>
         </div>
     </main>
@@ -129,8 +129,17 @@
         const loadChatInput = document.getElementById('load-chat-input');
 
         let engine = null;
+        // Enforce High-Performance GPU if possible
+        if (navigator.gpu) {
+            const originalRequestAdapter = navigator.gpu.requestAdapter.bind(navigator.gpu);
+            navigator.gpu.requestAdapter = async function(options) {
+                const newOptions = Object.assign({}, options, { powerPreference: "high-performance" });
+                return originalRequestAdapter(newOptions);
+            };
+        }
+
         let messages = [
-            { role: "system", content: "Du bist ein hilfreicher KI-Assistent." }
+            { role: "system", content: "You are a helpful AI assistant." }
         ];
 
 
@@ -175,12 +184,12 @@
                                 addMessage(msg.role, msg.content);
                             }
                         });
-                        addMessage('system', 'Chat erfolgreich geladen.');
+                        addMessage('system', 'Chat loaded successfully.');
                     } else {
-                        addMessage('system', 'Fehler: Ungültiges Dateiformat.');
+                        addMessage('system', 'Error: Invalid file format.');
                     }
                 } catch (err) {
-                    addMessage('system', 'Fehler beim Laden der Datei: ' + err.message);
+                    addMessage('system', 'Error loading file: ' + err.message);
                 }
             };
             reader.readAsText(file);
@@ -195,7 +204,7 @@
             modelSelector.disabled = true;
             progressContainer.classList.remove('hidden');
             chatContainer.innerHTML = '';
-            messages = [{ role: "system", content: "Du bist ein hilfreicher KI-Assistent." }];
+            messages = [{ role: "system", content: "You are a helpful AI assistant." }];
 
             const initProgressCallback = (progress) => {
                 progressText.textContent = progress.text;
@@ -207,12 +216,12 @@
             try {
                 engine = await CreateMLCEngine(selectedModel, { initProgressCallback });
                 progressContainer.classList.add('hidden');
-                addMessage("system", `Modell ${selectedModel} erfolgreich geladen! Sie können nun chatten.`);
+                addMessage("system", `Model ${selectedModel} loaded successfully! You can now chat.`);
                 userInput.disabled = false;
                 sendBtn.disabled = false;
                 userInput.focus();
             } catch (err) {
-                progressText.textContent = `Fehler: ${err.message}`;
+                progressText.textContent = `Error: ${err.message}`;
                 progressBar.classList.replace('bg-blue-600', 'bg-red-600');
                 progressBar.style.width = '100%';
                 loadBtn.disabled = false;
@@ -266,7 +275,7 @@
 
                 messages.push({ role: "assistant", content: replyText });
             } catch (err) {
-                replyDiv.textContent = `Fehler: ${err.message}`;
+                replyDiv.textContent = `Error: ${err.message}`;
                 replyDiv.classList.add('text-red-400');
             } finally {
                 userInput.disabled = false;

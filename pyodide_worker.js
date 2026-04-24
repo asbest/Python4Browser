@@ -3,6 +3,16 @@ importScripts('https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js');
 let pyodide;
 let llmEngine = null;
 
+
+// Enforce High-Performance GPU if possible
+if (self.navigator && self.navigator.gpu) {
+    const originalRequestAdapter = self.navigator.gpu.requestAdapter.bind(self.navigator.gpu);
+    self.navigator.gpu.requestAdapter = async function(options) {
+        const newOptions = Object.assign({}, options, { powerPreference: "high-performance" });
+        return originalRequestAdapter(newOptions);
+    };
+}
+
 // Helper to dynamically load WebLLM from ES Module
 async function getWebLLM() {
     return await import("https://esm.run/@mlc-ai/web-llm");
