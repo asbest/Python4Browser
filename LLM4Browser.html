@@ -79,6 +79,10 @@
                 📂 Load
             </label>
             <input type="file" id="load-chat-input" class="hidden" accept=".json">
+            <div class="flex items-center space-x-2 border-r border-gray-600 pr-4 mr-2">
+                <label for="context-size-input" class="text-sm text-gray-300">Context Size:</label>
+                <input type="number" id="context-size-input" class="bg-gray-700 text-white rounded p-2 text-sm w-24 focus:outline-none" min="1" placeholder="Auto">
+            </div>
             <select id="model-selector" class="bg-gray-700 text-white rounded p-2 text-sm focus:outline-none">
                 <option value="">Loading models...</option>
             </select>
@@ -110,22 +114,23 @@
             <!-- Attachment Preview -->
             <div id="attachment-preview" class="hidden flex items-center justify-between bg-gray-700 rounded p-2 text-sm">
                 <span id="attachment-filename" class="text-gray-300 truncate mr-2"></span>
-                <button id="remove-attachment-btn" class="text-red-400 hover:text-red-300 font-bold px-2 py-1 rounded" title="Anhang entfernen">
+                <button id="remove-attachment-btn" class="text-red-400 hover:text-red-300 font-bold px-2 py-1 rounded" title="Remove Attachment">
                     ✕
                 </button>
             </div>
 
             <div class="flex items-end space-x-2">
-                <input type="file" id="attach-file-input" class="hidden">
-                <button id="attach-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center" disabled title="Datei anhängen">
+                <input type="file" id="attach-file-input" class="hidden" accept=".txt,.md,.csv,.js,.py,.html,.json,.xml,.css,.log">
+                <button id="attach-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center" disabled title="Attach File">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                         <path fill-rule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clip-rule="evenodd" />
                     </svg>
                 </button>
                 <textarea id="user-input" rows="1" class="flex-grow bg-gray-800 border border-gray-700 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none overflow-hidden" placeholder="Type a message..." disabled></textarea>
-                <button id="send-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                    Send
+                <button id="stop-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg transition-colors hidden disabled:opacity-50 disabled:cursor-not-allowed" title="Stop generation">
+                    Stop
                 </button>
+                <button id="send-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>\n                    Send\n                </button>
             </div>
         </div>
     </main>
@@ -148,6 +153,8 @@
         const attachmentPreview = document.getElementById('attachment-preview');
         const attachmentFilename = document.getElementById('attachment-filename');
         const removeAttachmentBtn = document.getElementById('remove-attachment-btn');
+        const stopBtn = document.getElementById('stop-btn');
+        const contextSizeInput = document.getElementById('context-size-input');
 
         let engine = null;
         let attachedFileName = null;
@@ -166,7 +173,7 @@
         ];
 
 
-        // Dynamisch Modelle beim Start laden
+        // Dynamically load models at startup
         const availableModels = prebuiltAppConfig.model_list.map(m => m.model_id);
         modelSelector.innerHTML = ''; // Leeren
         availableModels.forEach(modelId => {
@@ -174,6 +181,55 @@
             option.value = modelId;
             option.textContent = modelId;
             modelSelector.appendChild(option);
+        });
+
+        async function updateContextSizeMax() {
+            const selectedModelId = modelSelector.value;
+            if (!selectedModelId) return;
+
+            const modelConfig = prebuiltAppConfig.model_list.find(m => m.model_id === selectedModelId);
+            if (!modelConfig) return;
+
+            let maxContext = null;
+            if (modelConfig.overrides && modelConfig.overrides.context_window_size) {
+                maxContext = modelConfig.overrides.context_window_size;
+            } else {
+                try {
+                    const res = await fetch(`${modelConfig.model}/resolve/main/mlc-chat-config.json`);
+                    if (res.ok) {
+                        const json = await res.json();
+                        if (json.context_window_size) {
+                            maxContext = json.context_window_size;
+                        }
+                    }
+                } catch (e) {
+                    console.warn("Failed to fetch model config:", e);
+                }
+            }
+
+            if (maxContext) {
+                contextSizeInput.max = maxContext;
+                contextSizeInput.title = `Maximum: ${maxContext}`;
+            } else {
+                contextSizeInput.removeAttribute('max');
+                contextSizeInput.removeAttribute('title');
+            }
+        }
+
+        modelSelector.addEventListener('change', updateContextSizeMax);
+        // Call initially
+        if (availableModels.length > 0) {
+            updateContextSizeMax();
+        }
+
+        contextSizeInput.addEventListener('input', () => {
+            if (contextSizeInput.max) {
+                const max = parseInt(contextSizeInput.max);
+                const val = parseInt(contextSizeInput.value);
+                if (val > max) {
+                    contextSizeInput.value = max;
+                }
+            }
         });
 
         // --- Save / Load Chat ---
@@ -251,10 +307,17 @@
 
         removeAttachmentBtn.addEventListener('click', clearAttachment);
 
+        stopBtn.addEventListener('click', () => {
+            if (engine) {
+                engine.interruptGenerate();
+            }
+        });
+
         loadBtn.addEventListener('click', async () => {
             const selectedModel = modelSelector.value;
             loadBtn.disabled = true;
             modelSelector.disabled = true;
+            contextSizeInput.disabled = true;
             progressContainer.classList.remove('hidden');
             chatContainer.innerHTML = '';
             messages = [{ role: "system", content: "You are a helpful AI assistant." }];
@@ -266,8 +329,14 @@
                 }
             };
 
+            const chatOpts = {};
+            const userContextSize = parseInt(contextSizeInput.value);
+            if (!isNaN(userContextSize) && userContextSize > 0) {
+                chatOpts.context_window_size = userContextSize;
+            }
+
             try {
-                engine = await CreateMLCEngine(selectedModel, { initProgressCallback });
+                engine = await CreateMLCEngine(selectedModel, { initProgressCallback }, chatOpts);
                 progressContainer.classList.add('hidden');
                 addMessage("system", `Model ${selectedModel} loaded successfully! You can now chat.`);
                 userInput.disabled = false;
@@ -280,6 +349,7 @@
                 progressBar.style.width = '100%';
                 loadBtn.disabled = false;
                 modelSelector.disabled = false;
+                contextSizeInput.disabled = false;
             }
         });
 
@@ -307,16 +377,17 @@
             userInput.value = '';
             userInput.style.height = 'auto'; // reset height
             userInput.disabled = true;
-            sendBtn.disabled = true;
+            sendBtn.classList.add('hidden');
+            stopBtn.classList.remove('hidden');
             attachBtn.disabled = true;
 
             let messageContent = text;
             let displayContent = text;
 
             if (attachedFileContent) {
-                const fileContext = `Angehängte Datei '${attachedFileName}':\n\`\`\`\n${attachedFileContent}\n\`\`\`\n\n`;
+                const fileContext = `Attached file '${attachedFileName}':\n\`\`\`\n${attachedFileContent}\n\`\`\`\n\n`;
                 messageContent = fileContext + text;
-                displayContent = `*(Datei angehängt: ${attachedFileName})*\n\n` + text;
+                displayContent = `*(Attached file: ${attachedFileName})*\n\n` + text;
             }
 
             addMessage("user", displayContent);
@@ -341,11 +412,16 @@
 
                 messages.push({ role: "assistant", content: replyText });
             } catch (err) {
-                replyDiv.textContent = `Error: ${err.message}`;
-                replyDiv.classList.add('text-red-400');
+                if (err.message.includes("interrupt")) {
+                    replyDiv.textContent += "\n\n*(Generation aborted)*";
+                } else {
+                    replyDiv.textContent = `Error: ${err.message}`;
+                    replyDiv.classList.add('text-red-400');
+                }
             } finally {
                 userInput.disabled = false;
-                sendBtn.disabled = false;
+                stopBtn.classList.add('hidden');
+                sendBtn.classList.remove('hidden');
                 attachBtn.disabled = false;
                 userInput.focus();
             }
