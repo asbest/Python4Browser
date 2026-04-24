@@ -1,9 +1,18 @@
 # Python4Browser
 
-Demo:
+Web App:
 https://asbest.github.io/Python4Browser/Python4Browser.html
 
 Please support me on Patreon: https://www.patreon.com/posts/populate-155676276?utm_medium=clipboard_copy&utm_source=copyLink&utm_campaign=postshare_creator&utm_content=join_link
+
+Additional: Simple LLM Chat interface running in Browser with embedded WebLLM (best with Edge):
+https://asbest.github.io/Python4Browser/LLM4Browser.html
+
+# code to access browser LLM in Python4Browser:
+import browser_llm
+await browser_llm.load_model()
+response = await browser_llm.chat("question")
+print(response)
 
 🐍 Full Python Runtime - Complete CPython environment powered by Pyodide and WebAssembly
 📦 Pre-loaded Libraries - pandas, numpy, and networkx ready to use out of the box
