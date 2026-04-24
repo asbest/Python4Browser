@@ -106,11 +106,27 @@
         </div>
 
         <!-- Input Area -->
-        <div class="flex items-end space-x-2">
-            <textarea id="user-input" rows="1" class="flex-grow bg-gray-800 border border-gray-700 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none overflow-hidden" placeholder="Type a message..." disabled></textarea>
-            <button id="send-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                Send
-            </button>
+        <div class="flex flex-col space-y-2">
+            <!-- Attachment Preview -->
+            <div id="attachment-preview" class="hidden flex items-center justify-between bg-gray-700 rounded p-2 text-sm">
+                <span id="attachment-filename" class="text-gray-300 truncate mr-2"></span>
+                <button id="remove-attachment-btn" class="text-red-400 hover:text-red-300 font-bold px-2 py-1 rounded" title="Anhang entfernen">
+                    ✕
+                </button>
+            </div>
+
+            <div class="flex items-end space-x-2">
+                <input type="file" id="attach-file-input" class="hidden">
+                <button id="attach-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center" disabled title="Datei anhängen">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clip-rule="evenodd" />
+                    </svg>
+                </button>
+                <textarea id="user-input" rows="1" class="flex-grow bg-gray-800 border border-gray-700 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none overflow-hidden" placeholder="Type a message..." disabled></textarea>
+                <button id="send-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                    Send
+                </button>
+            </div>
         </div>
     </main>
 
@@ -127,8 +143,15 @@
         const sendBtn = document.getElementById('send-btn');
         const saveChatBtn = document.getElementById('save-chat-btn');
         const loadChatInput = document.getElementById('load-chat-input');
+        const attachBtn = document.getElementById('attach-btn');
+        const attachFileInput = document.getElementById('attach-file-input');
+        const attachmentPreview = document.getElementById('attachment-preview');
+        const attachmentFilename = document.getElementById('attachment-filename');
+        const removeAttachmentBtn = document.getElementById('remove-attachment-btn');
 
         let engine = null;
+        let attachedFileName = null;
+        let attachedFileContent = null;
         // Enforce High-Performance GPU if possible
         if (navigator.gpu) {
             const originalRequestAdapter = navigator.gpu.requestAdapter.bind(navigator.gpu);
@@ -198,6 +221,36 @@
             e.target.value = null;
         });
 
+        // --- File Attachment ---
+        attachBtn.addEventListener('click', () => {
+            attachFileInput.click();
+        });
+
+        attachFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                attachedFileName = file.name;
+                attachedFileContent = event.target.result;
+                attachmentFilename.textContent = attachedFileName;
+                attachmentPreview.classList.remove('hidden');
+            };
+            reader.readAsText(file);
+
+            e.target.value = null;
+        });
+
+        function clearAttachment() {
+            attachedFileName = null;
+            attachedFileContent = null;
+            attachmentPreview.classList.add('hidden');
+            attachmentFilename.textContent = '';
+        }
+
+        removeAttachmentBtn.addEventListener('click', clearAttachment);
+
         loadBtn.addEventListener('click', async () => {
             const selectedModel = modelSelector.value;
             loadBtn.disabled = true;
@@ -219,6 +272,7 @@
                 addMessage("system", `Model ${selectedModel} loaded successfully! You can now chat.`);
                 userInput.disabled = false;
                 sendBtn.disabled = false;
+                attachBtn.disabled = false;
                 userInput.focus();
             } catch (err) {
                 progressText.textContent = `Error: ${err.message}`;
@@ -248,15 +302,27 @@
 
         async function handleSend() {
             const text = userInput.value.trim();
-            if (!text || !engine) return;
+            if ((!text && !attachedFileContent) || !engine) return;
 
             userInput.value = '';
             userInput.style.height = 'auto'; // reset height
             userInput.disabled = true;
             sendBtn.disabled = true;
+            attachBtn.disabled = true;
 
-            addMessage("user", text);
-            messages.push({ role: "user", content: text });
+            let messageContent = text;
+            let displayContent = text;
+
+            if (attachedFileContent) {
+                const fileContext = `Angehängte Datei '${attachedFileName}':\n\`\`\`\n${attachedFileContent}\n\`\`\`\n\n`;
+                messageContent = fileContext + text;
+                displayContent = `*(Datei angehängt: ${attachedFileName})*\n\n` + text;
+            }
+
+            addMessage("user", displayContent);
+            messages.push({ role: "user", content: messageContent });
+
+            clearAttachment();
 
             const replyDiv = addMessage("assistant", "");
 
@@ -280,6 +346,7 @@
             } finally {
                 userInput.disabled = false;
                 sendBtn.disabled = false;
+                attachBtn.disabled = false;
                 userInput.focus();
             }
         }
