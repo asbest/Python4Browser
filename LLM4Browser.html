@@ -588,10 +588,6 @@
         }
 
         updateModelSelector();
-
-        if (appSettings.selectedModel) {
-            modelSelector.value = appSettings.selectedModel;
-        }
         if (appSettings.contextSize) {
             contextSizeInput.value = appSettings.contextSize;
         }
@@ -631,9 +627,7 @@
 
         modelSelector.addEventListener('change', updateContextSizeMax);
         // Call initially
-        if (availableModels.length > 0) {
-            updateContextSizeMax();
-        }
+        updateContextSizeMax();
 
         // --- Save / Load / Export Chat ---
         saveChatBtn.addEventListener('click', () => {
@@ -840,6 +834,10 @@
                 attachBtn.disabled = false;
                 micBtn.disabled = false;
                 userInput.focus();
+                loadBtn.disabled = false;
+                if (loadBtnMobile) loadBtnMobile.disabled = false;
+                modelSelector.disabled = false;
+                contextSizeInput.disabled = false;
             } catch (err) {
                 progressText.textContent = `Error: ${err.message}`;
                 progressBar.classList.replace('bg-blue-600', 'bg-red-600');
