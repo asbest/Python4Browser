@@ -133,44 +133,50 @@
     <!-- Main -->
     <main class="flex-grow flex flex-col p-4 overflow-hidden relative max-w-4xl w-full mx-auto">
         <!-- Settings Modal -->
-        <div id="settings-modal" class="hidden absolute top-0 left-0 w-full h-full bg-gray-900 bg-opacity-75 z-30 flex items-center justify-center p-4">
-            <div class="bg-gray-800 border border-gray-700 rounded-lg p-6 w-full max-w-lg shadow-xl relative flex flex-col max-h-full">
-                <h2 class="text-xl font-bold text-white mb-4">Settings</h2>
-                <div class="space-y-4 overflow-y-auto flex-grow pr-2">
+        <div id="settings-modal" class="hidden absolute top-0 left-0 w-full h-full bg-gray-900 bg-opacity-75 z-30 flex items-center justify-center p-2 sm:p-4">
+            <div class="bg-gray-800 border border-gray-700 rounded-lg p-4 sm:p-6 w-full max-w-lg shadow-xl relative flex flex-col max-h-full">
+                <h2 class="text-lg sm:text-xl font-bold text-white mb-2 sm:mb-4">Settings</h2>
+                <div class="space-y-3 sm:space-y-4 overflow-y-auto flex-grow pr-2">
                     <div>
-                        <label class="block text-sm text-gray-300 mb-1">System Prompt</label>
-                        <textarea id="sys-prompt-input" rows="3" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-sm text-white focus:outline-none"></textarea>
+                        <label class="block text-xs sm:text-sm text-gray-300 mb-1">System Prompt</label>
+                        <textarea id="sys-prompt-input" rows="2" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-xs sm:text-sm text-white focus:outline-none"></textarea>
                     </div>
-                    <div>
-                        <label class="block text-sm text-gray-300 mb-1">Temperature (<span id="temp-val">1.0</span>)</label>
-                        <input type="range" id="temp-input" min="0" max="2" step="0.1" value="1.0" class="w-full">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                        <div>
+                            <label class="block text-xs sm:text-sm text-gray-300 mb-1">Temperature (<span id="temp-val">1.0</span>)</label>
+                            <input type="range" id="temp-input" min="0" max="2" step="0.1" value="1.0" class="w-full">
+                        </div>
+                        <div>
+                            <label class="block text-xs sm:text-sm text-gray-300 mb-1">Top-P (<span id="top-p-val">1.0</span>)</label>
+                            <input type="range" id="top-p-input" min="0" max="1" step="0.05" value="1.0" class="w-full">
+                        </div>
                     </div>
-                    <div>
-                        <label class="block text-sm text-gray-300 mb-1">Top-P (<span id="top-p-val">1.0</span>)</label>
-                        <input type="range" id="top-p-input" min="0" max="1" step="0.05" value="1.0" class="w-full">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                        <div>
+                            <label class="block text-xs sm:text-sm text-gray-300 mb-1">Repetition Penalty (<span id="rep-pen-val">1.0</span>)</label>
+                            <input type="range" id="rep-pen-input" min="1" max="2" step="0.05" value="1.0" class="w-full">
+                        </div>
+                        <div>
+                            <label class="block text-xs sm:text-sm text-gray-300 mb-1">Max Tokens</label>
+                            <input type="number" id="max-tokens-input" placeholder="e.g. 1024" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-xs sm:text-sm text-white focus:outline-none">
+                        </div>
                     </div>
-                    <div>
-                        <label class="block text-sm text-gray-300 mb-1">Repetition Penalty (<span id="rep-pen-val">1.0</span>)</label>
-                        <input type="range" id="rep-pen-input" min="1" max="2" step="0.05" value="1.0" class="w-full">
-                    </div>
-                    <div>
-                        <label class="block text-sm text-gray-300 mb-1">Max Tokens</label>
-                        <input type="number" id="max-tokens-input" placeholder="e.g. 1024" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-sm text-white focus:outline-none">
-                    </div>
-                    <div>
-                        <label class="block text-sm text-gray-300 mb-1">Backend</label>
-                        <select id="backend-selector" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-sm text-white focus:outline-none">
-                            <option value="webllm">WebLLM (WebGPU)</option>
-                            <option value="transformers">Transformers.js (CPU/WASM)</option>
-                        </select>
-                    </div>
-                    <div class="flex items-center space-x-2 pt-2">
-                        <input type="checkbox" id="use-cpu-input" class="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500">
-                        <label for="use-cpu-input" class="text-sm text-gray-300">Use CPU (Slow / Fallback)</label>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 items-end">
+                        <div>
+                            <label class="block text-xs sm:text-sm text-gray-300 mb-1">Backend</label>
+                            <select id="backend-selector" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-xs sm:text-sm text-white focus:outline-none">
+                                <option value="webllm">WebLLM (WebGPU)</option>
+                                <option value="transformers">Transformers.js (CPU/WASM)</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center space-x-2 pb-2">
+                            <input type="checkbox" id="use-cpu-input" class="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500">
+                            <label for="use-cpu-input" class="text-xs sm:text-sm text-gray-300">Use CPU (WebLLM only)</label>
+                        </div>
                     </div>
                 </div>
-                <div class="mt-6 flex justify-end">
-                    <button id="close-settings-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Close</button>
+                <div class="mt-4 sm:mt-6 flex justify-end">
+                    <button id="close-settings-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded text-sm sm:text-base">Close</button>
                 </div>
             </div>
         </div>
@@ -801,11 +807,26 @@
                 if (typeof progress === 'string') {
                     progressText.textContent = progress;
                 } else {
-                    progressText.textContent = progress.text || progress.status || "Loading...";
+                    let text = "Loading...";
+                    if (progress.text) {
+                        text = progress.text;
+                    } else if (progress.status) {
+                        text = progress.status;
+                        if (progress.file) {
+                            text += `: ${progress.file}`;
+                        }
+                    }
+
                     if (progress.progress !== undefined) {
-                        progressBar.style.width = `${progress.progress * 100}%`;
+                        const percent = (progress.progress * 100).toFixed(1);
+                        progressText.textContent = `[${percent}%] ${text}`;
+                        progressBar.style.width = `${percent}%`;
                     } else if (progress.loaded && progress.total) {
-                        progressBar.style.width = `${(progress.loaded / progress.total) * 100}%`;
+                        const percent = ((progress.loaded / progress.total) * 100).toFixed(1);
+                        progressText.textContent = `[${percent}%] ${text}`;
+                        progressBar.style.width = `${percent}%`;
+                    } else {
+                        progressText.textContent = text;
                     }
                 }
             };
