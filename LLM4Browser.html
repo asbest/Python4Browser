@@ -157,6 +157,13 @@
                         <label class="block text-sm text-gray-300 mb-1">Max Tokens</label>
                         <input type="number" id="max-tokens-input" placeholder="e.g. 1024" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-sm text-white focus:outline-none">
                     </div>
+                    <div>
+                        <label class="block text-sm text-gray-300 mb-1">Backend</label>
+                        <select id="backend-selector" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-sm text-white focus:outline-none">
+                            <option value="webllm">WebLLM (WebGPU)</option>
+                            <option value="transformers">Transformers.js (CPU/WASM)</option>
+                        </select>
+                    </div>
                     <div class="flex items-center space-x-2 pt-2">
                         <input type="checkbox" id="use-cpu-input" class="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500">
                         <label for="use-cpu-input" class="text-sm text-gray-300">Use CPU (Slow / Fallback)</label>
@@ -217,6 +224,7 @@
 
     <script type="module">
         import { CreateMLCEngine, prebuiltAppConfig } from "https://esm.run/@mlc-ai/web-llm";
+        import { pipeline, TextStreamer } from "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.2.1";
 
         const loadBtn = document.getElementById('load-btn');
         const loadBtnMobile = document.getElementById('load-btn-mobile');
@@ -254,6 +262,93 @@
         const repPenVal = document.getElementById('rep-pen-val');
         const maxTokensInput = document.getElementById('max-tokens-input');
         const useCPUInput = document.getElementById('use-cpu-input');
+        const backendSelector = document.getElementById('backend-selector');
+
+        class TransformersEngine {
+            constructor(modelId, pipeline) {
+                this.modelId = modelId;
+                this.pipe = pipeline;
+                this.chat = {
+                    completions: {
+                        create: this.createCompletion.bind(this)
+                    }
+                };
+            }
+
+            async *createCompletion(options) {
+                const messages = options.messages;
+                const stream = options.stream;
+                const temperature = options.temperature || 1.0;
+                const top_p = options.top_p || 1.0;
+                const max_tokens = options.max_tokens || 1024;
+
+                let fullText = "";
+                const callback = (text) => {
+                    fullText += text;
+                };
+
+                const streamer = new TextStreamer(this.pipe.tokenizer, {
+                    skip_prompt: true,
+                    callback_function: callback,
+                });
+
+                // Convert OpenAI messages to Transformers.js format if necessary
+                // Most modern models use a chat template
+                const inputs = this.pipe.tokenizer.apply_chat_template(messages, {
+                    tokenize: false,
+                    add_generation_prompt: true,
+                });
+
+                const promise = this.pipe(inputs, {
+                    max_new_tokens: max_tokens,
+                    temperature: temperature,
+                    top_p: top_p,
+                    do_sample: temperature > 0,
+                    streamer: streamer,
+                    return_full_text: false,
+                });
+
+                if (stream) {
+                    let lastLength = 0;
+                    while (true) {
+                        if (fullText.length > lastLength) {
+                            const delta = fullText.slice(lastLength);
+                            lastLength = fullText.length;
+                            yield {
+                                choices: [{
+                                    delta: { content: delta }
+                                }]
+                            };
+                        }
+                        // Check if finished
+                        // This is a bit tricky with the pipeline API directly
+                        // But since we are in an async generator, we can wait a bit or use a better signal
+                        // For now, let's wait for the promise to resolve
+                        const result = await Promise.race([promise, new Promise(r => setTimeout(() => r('timeout'), 50))]);
+                        if (result !== 'timeout') {
+                             // Final yield if any
+                             if (fullText.length > lastLength) {
+                                yield { choices: [{ delta: { content: fullText.slice(lastLength) } }] };
+                             }
+                             break;
+                        }
+                    }
+                } else {
+                    const output = await promise;
+                    yield {
+                        choices: [{
+                            message: { content: output[0].generated_text }
+                        }]
+                    };
+                }
+            }
+
+            interruptGenerate() {
+                // Transformers.js doesn't have a direct interrupt for pipeline yet in v3
+                // but we could try to flag the streamer
+                console.warn("Interrupt not yet supported for Transformers.js backend");
+            }
+        }
 
         let appSettings = JSON.parse(localStorage.getItem('LLM4BrowserSettings')) || {
             sysPrompt: "You are a helpful AI assistant.",
@@ -263,7 +358,8 @@
             max_tokens: null,
             selectedModel: null,
             contextSize: null,
-            useCPU: false
+            useCPU: false,
+            backend: 'webllm'
         };
 
         let engine = null;
@@ -425,6 +521,7 @@
             appSettings.selectedModel = modelSelector.value;
             appSettings.contextSize = contextSizeInput.value ? parseInt(contextSizeInput.value) : null;
             appSettings.useCPU = useCPUInput.checked;
+            appSettings.backend = backendSelector.value;
             localStorage.setItem('LLM4BrowserSettings', JSON.stringify(appSettings));
 
             // update system prompt in current chat if it is a new chat
@@ -443,6 +540,7 @@
             repPenVal.textContent = appSettings.repetition_penalty.toFixed(2);
             maxTokensInput.value = appSettings.max_tokens || '';
             useCPUInput.checked = !!appSettings.useCPU;
+            backendSelector.value = appSettings.backend || 'webllm';
             settingsModal.classList.remove('hidden');
         });
 
@@ -457,14 +555,39 @@
 
 
         // Dynamically load models at startup
-        const availableModels = prebuiltAppConfig.model_list.map(m => m.model_id);
-        modelSelector.innerHTML = ''; // Leeren
-        availableModels.forEach(modelId => {
-            const option = document.createElement('option');
-            option.value = modelId;
-            option.textContent = modelId;
-            modelSelector.appendChild(option);
-        });
+        function updateModelSelector() {
+            const backend = appSettings.backend || 'webllm';
+            modelSelector.innerHTML = '';
+
+            if (backend === 'webllm') {
+                const availableModels = prebuiltAppConfig.model_list.map(m => m.model_id);
+                availableModels.forEach(modelId => {
+                    const option = document.createElement('option');
+                    option.value = modelId;
+                    option.textContent = modelId;
+                    modelSelector.appendChild(option);
+                });
+            } else if (backend === 'transformers') {
+                const transformersModels = [
+                    'onnx-community/Qwen2.5-0.5B-Instruct',
+                    'onnx-community/Llama-3.2-1B-Instruct',
+                    'onnx-community/SmolLM2-135M-Instruct',
+                    'onnx-community/phi-4-mini-instruct-ONNX'
+                ];
+                transformersModels.forEach(modelId => {
+                    const option = document.createElement('option');
+                    option.value = modelId;
+                    option.textContent = modelId;
+                    modelSelector.appendChild(option);
+                });
+            }
+
+            if (appSettings.selectedModel) {
+                modelSelector.value = appSettings.selectedModel;
+            }
+        }
+
+        updateModelSelector();
 
         if (appSettings.selectedModel) {
             modelSelector.value = appSettings.selectedModel;
@@ -660,10 +783,16 @@
             updateContextSizeMax();
             saveSettings();
         });
+        backendSelector.addEventListener('change', () => {
+            appSettings.backend = backendSelector.value;
+            updateModelSelector();
+            saveSettings();
+        });
         contextSizeInput.addEventListener('input', saveSettings);
 
         async function initiateModelLoad() {
             const selectedModel = modelSelector.value;
+            const backend = appSettings.backend || 'webllm';
             saveSettings();
             loadBtn.disabled = true;
             if (loadBtnMobile) loadBtnMobile.disabled = true;
@@ -674,22 +803,37 @@
             messages = [{ role: "system", content: appSettings.sysPrompt }];
 
             const initProgressCallback = (progress) => {
-                progressText.textContent = progress.text;
-                if (progress.progress !== undefined) {
-                    progressBar.style.width = `${progress.progress * 100}%`;
+                // Handle different progress formats
+                if (typeof progress === 'string') {
+                    progressText.textContent = progress;
+                } else {
+                    progressText.textContent = progress.text || progress.status || "Loading...";
+                    if (progress.progress !== undefined) {
+                        progressBar.style.width = `${progress.progress * 100}%`;
+                    } else if (progress.loaded && progress.total) {
+                        progressBar.style.width = `${(progress.loaded / progress.total) * 100}%`;
+                    }
                 }
             };
 
-            const chatOpts = {};
-            const userContextSize = parseInt(contextSizeInput.value);
-            if (!isNaN(userContextSize) && userContextSize > 0) {
-                chatOpts.context_window_size = userContextSize;
-            }
-
             try {
-                engine = await CreateMLCEngine(selectedModel, { initProgressCallback }, chatOpts);
+                if (backend === 'webllm') {
+                    const chatOpts = {};
+                    const userContextSize = parseInt(contextSizeInput.value);
+                    if (!isNaN(userContextSize) && userContextSize > 0) {
+                        chatOpts.context_window_size = userContextSize;
+                    }
+                    engine = await CreateMLCEngine(selectedModel, { initProgressCallback }, chatOpts);
+                } else {
+                    const pipe = await pipeline('text-generation', selectedModel, {
+                        device: 'wasm',
+                        progress_callback: initProgressCallback
+                    });
+                    engine = new TransformersEngine(selectedModel, pipe);
+                }
+
                 progressContainer.classList.add('hidden');
-                const cpuLabel = appSettings.useCPU ? " (CPU)" : "";
+                const cpuLabel = (appSettings.useCPU || backend === 'transformers') ? " (CPU)" : "";
                 addMessage("system", `Model ${selectedModel}${cpuLabel} loaded successfully! You can now chat.`);
                 userInput.disabled = false;
                 sendBtn.disabled = false;
@@ -704,6 +848,7 @@
                 if (loadBtnMobile) loadBtnMobile.disabled = false;
                 modelSelector.disabled = false;
                 contextSizeInput.disabled = false;
+                console.error(err);
             }
         }
 

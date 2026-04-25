@@ -32,6 +32,10 @@ async function getWebLLM() {
     return await import("https://esm.run/@mlc-ai/web-llm");
 }
 
+async function getTransformers() {
+    return await import("https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.2.1");
+}
+
 self.onmessage = async (e) => {
     const { id, type, payload } = e.data;
 
@@ -115,21 +119,56 @@ self.onmessage = async (e) => {
                 `);
 
                 // Expose JS functions directly to the global worker scope so 'import js' can access them
-                self._js_load_llm = async (modelId) => {
+                self._js_load_llm = async (modelId, backend = "webllm") => {
                     if (llmEngine) {
                         return "Model already loaded.";
                     }
                     try {
-                        const webllm = await getWebLLM();
-                        const initProgressCallback = (progress) => {
-                            // Can print progress to python stdout
-                            // console.log(progress);
-                        };
-                        const cpuLabel = appSettings.useCPU ? " via WebGPU (CPU mode)" : " via WebGPU (High Performance)";
-                        console.log(`Loading LLM ${modelId}${cpuLabel}...`);
+                        if (backend === "webllm") {
+                            const webllm = await getWebLLM();
+                            const initProgressCallback = (progress) => {
+                                // Can print progress to python stdout
+                                // console.log(progress);
+                            };
+                            const cpuLabel = appSettings.useCPU ? " via WebGPU (CPU mode)" : " via WebGPU (High Performance)";
+                            console.log(`Loading LLM ${modelId}${cpuLabel}...`);
 
-                        llmEngine = await webllm.CreateMLCEngine(modelId, { initProgressCallback });
-                        return `LLM successfully loaded!${appSettings.useCPU ? " [CPU Mode]" : ""}`;
+                            llmEngine = await webllm.CreateMLCEngine(modelId, { initProgressCallback });
+                            llmEngine._backend = "webllm";
+                            return `LLM successfully loaded!${appSettings.useCPU ? " [CPU Mode]" : ""}`;
+                        } else {
+                            const { pipeline } = await getTransformers();
+                            console.log(`Loading Transformers.js model ${modelId} (CPU/WASM)...`);
+                            const pipe = await pipeline('text-generation', modelId, {
+                                device: 'wasm'
+                            });
+                            llmEngine = {
+                                _pipe: pipe,
+                                _backend: "transformers",
+                                chat: {
+                                    completions: {
+                                        create: async (options) => {
+                                            const inputs = pipe.tokenizer.apply_chat_template(options.messages, {
+                                                tokenize: false,
+                                                add_generation_prompt: true,
+                                            });
+                                            const output = await pipe(inputs, {
+                                                max_new_tokens: options.max_tokens || 1024,
+                                                do_sample: true,
+                                                temperature: 0.7,
+                                                return_full_text: false,
+                                            });
+                                            return {
+                                                choices: [{
+                                                    message: { content: output[0].generated_text }
+                                                }]
+                                            };
+                                        }
+                                    }
+                                }
+                            };
+                            return `LLM successfully loaded! [Transformers.js]`;
+                        }
                     } catch (err) {
                         return "Error loading LLM: " + err.message;
                     }
@@ -141,17 +180,21 @@ self.onmessage = async (e) => {
                     }
                     const messages = [{ role: "user", content: prompt }];
                     const reply = await llmEngine.chat.completions.create({ messages });
-                    return reply.choices[0].message.content;
+                    if (llmEngine._backend === "webllm") {
+                        return reply.choices[0].message.content;
+                    } else {
+                        return reply.choices[0].message.content;
+                    }
                 };
 
                 await pyodide.runPythonAsync(`
                     import browser_llm
                     import asyncio
 
-                    async def async_load(model_id="Llama-3.2-1B-Instruct-q4f16_1-MLC"):
+                    async def async_load(model_id="Llama-3.2-1B-Instruct-q4f16_1-MLC", backend="webllm"):
                         import js
-                        print(f"Loading {model_id}...")
-                        result = await js._js_load_llm(model_id)
+                        print(f"Loading {model_id} ({backend})...")
+                        result = await js._js_load_llm(model_id, backend)
                         print(result)
 
                     async def async_chat(prompt):
