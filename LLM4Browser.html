@@ -150,6 +150,10 @@
                         <label class="block text-sm text-gray-300 mb-1">Max Tokens</label>
                         <input type="number" id="max-tokens-input" placeholder="e.g. 1024" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-sm text-white focus:outline-none">
                     </div>
+                    <div class="flex items-center space-x-2 pt-2">
+                        <input type="checkbox" id="use-cpu-input" class="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500">
+                        <label for="use-cpu-input" class="text-sm text-gray-300">Use CPU (Slow / Fallback)</label>
+                    </div>
                 </div>
                 <div class="mt-6 flex justify-end">
                     <button id="close-settings-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">Close</button>
@@ -241,6 +245,7 @@
         const repPenInput = document.getElementById('rep-pen-input');
         const repPenVal = document.getElementById('rep-pen-val');
         const maxTokensInput = document.getElementById('max-tokens-input');
+        const useCPUInput = document.getElementById('use-cpu-input');
 
         let appSettings = JSON.parse(localStorage.getItem('LLM4BrowserSettings')) || {
             sysPrompt: "You are a helpful AI assistant.",
@@ -249,18 +254,24 @@
             repetition_penalty: 1.0,
             max_tokens: null,
             selectedModel: null,
-            contextSize: null
+            contextSize: null,
+            useCPU: false
         };
 
         let engine = null;
         let attachedFileName = null;
         let currentChatId = Date.now().toString();
         let attachedFileContent = null;
-        // Enforce High-Performance GPU if possible
+        // Enforce High-Performance GPU if possible or Fallback CPU
         if (navigator.gpu) {
             const originalRequestAdapter = navigator.gpu.requestAdapter.bind(navigator.gpu);
             navigator.gpu.requestAdapter = async function(options) {
-                const newOptions = Object.assign({}, options, { powerPreference: "high-performance" });
+                let newOptions;
+                if (appSettings.useCPU) {
+                    newOptions = Object.assign({}, options, { forceFallbackAdapter: true });
+                } else {
+                    newOptions = Object.assign({}, options, { powerPreference: "high-performance" });
+                }
                 return originalRequestAdapter(newOptions);
             };
         }
@@ -396,6 +407,7 @@
             appSettings.max_tokens = maxTokensInput.value ? parseInt(maxTokensInput.value) : null;
             appSettings.selectedModel = modelSelector.value;
             appSettings.contextSize = contextSizeInput.value ? parseInt(contextSizeInput.value) : null;
+            appSettings.useCPU = useCPUInput.checked;
             localStorage.setItem('LLM4BrowserSettings', JSON.stringify(appSettings));
 
             // update system prompt in current chat if it is a new chat
@@ -413,6 +425,7 @@
             repPenInput.value = appSettings.repetition_penalty;
             repPenVal.textContent = appSettings.repetition_penalty.toFixed(2);
             maxTokensInput.value = appSettings.max_tokens || '';
+            useCPUInput.checked = !!appSettings.useCPU;
             settingsModal.classList.remove('hidden');
         });
 
@@ -658,7 +671,8 @@
             try {
                 engine = await CreateMLCEngine(selectedModel, { initProgressCallback }, chatOpts);
                 progressContainer.classList.add('hidden');
-                addMessage("system", `Model ${selectedModel} loaded successfully! You can now chat.`);
+                const cpuLabel = appSettings.useCPU ? " (CPU)" : "";
+                addMessage("system", `Model ${selectedModel}${cpuLabel} loaded successfully! You can now chat.`);
                 userInput.disabled = false;
                 sendBtn.disabled = false;
                 attachBtn.disabled = false;
