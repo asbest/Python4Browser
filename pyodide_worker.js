@@ -58,7 +58,12 @@ self.onmessage = async (e) => {
 
                 pyodide.FS.chdir(dir);
 
-                await pyodide.loadPackage(['numpy', 'pandas', 'networkx', 'matplotlib', 'micropip', 'jedi']);
+                const packages = ['numpy', 'pandas', 'networkx', 'matplotlib', 'micropip', 'jedi'];
+                for (let i = 0; i < packages.length; i++) {
+                    self.postMessage({ type: 'stdout', text: `Loading package ${i+1}/${packages.length}: ${packages[i]}...\n` });
+                    await pyodide.loadPackage(packages[i]);
+                }
+
                 await pyodide.runPythonAsync(`
                     import pandas as pd
                     import numpy as np
@@ -120,8 +125,11 @@ self.onmessage = async (e) => {
                             // Can print progress to python stdout
                             // console.log(progress);
                         };
+                        const cpuLabel = appSettings.useCPU ? " via WebGPU (CPU mode)" : " via WebGPU (High Performance)";
+                        console.log(`Loading LLM ${modelId}${cpuLabel}...`);
+
                         llmEngine = await webllm.CreateMLCEngine(modelId, { initProgressCallback });
-                        return "LLM successfully loaded!";
+                        return `LLM successfully loaded!${appSettings.useCPU ? " [CPU Mode]" : ""}`;
                     } catch (err) {
                         return "Error loading LLM: " + err.message;
                     }

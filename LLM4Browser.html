@@ -69,39 +69,46 @@
 </head>
 <body class="bg-gray-900 text-gray-100 flex flex-col h-screen overflow-hidden">
     <!-- Header -->
-    <header class="bg-gray-800 border-b border-gray-700 p-4 flex justify-between items-center z-20">
-        <div class="flex items-center space-x-2">
-            <button id="sidebar-toggle-btn" class="text-gray-300 hover:text-white p-2 rounded hover:bg-gray-700 transition-colors" title="Toggle Sidebar">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-            </button>
-            <h1 class="text-xl font-bold text-white">LLM4Browser</h1>
-        </div>
-        <div class="flex items-center space-x-4">
-            <button id="settings-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded transition-colors text-sm" title="Settings">
-                ⚙️ Settings
-            </button>
-            <div class="flex items-center space-x-2 border-r border-gray-600 pr-4 mr-2">
-                <button id="save-chat-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded transition-colors text-sm" title="Save Chat as JSON">
-                    💾 JSON
+    <header class="bg-gray-800 border-b border-gray-700 p-2 sm:p-4 flex flex-col sm:flex-row justify-between items-center z-20 gap-2">
+        <div class="flex items-center justify-between w-full sm:w-auto">
+            <div class="flex items-center space-x-2">
+                <button id="sidebar-toggle-btn" class="text-gray-300 hover:text-white p-2 rounded hover:bg-gray-700 transition-colors" title="Toggle Sidebar">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
                 </button>
-                <button id="export-md-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded transition-colors text-sm" title="Export Chat as Markdown">
-                    📄 MD
+                <h1 class="text-lg sm:text-xl font-bold text-white">LLM4Browser</h1>
+            </div>
+            <!-- Mobile load button -->
+            <button id="load-btn-mobile" class="sm:hidden bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors text-xs">
+                Load
+            </button>
+        </div>
+
+        <div class="flex items-center space-x-2 sm:space-x-4 overflow-x-auto w-full sm:w-auto pb-2 sm:pb-0 scrollbar-hide">
+            <button id="settings-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-2 sm:px-3 rounded transition-colors text-xs sm:text-sm shrink-0" title="Settings">
+                ⚙️ <span class="hidden xs:inline">Settings</span>
+            </button>
+            <div class="flex items-center space-x-1 sm:space-x-2 border-r border-gray-600 pr-2 sm:pr-4 mr-1 sm:mr-2 shrink-0">
+                <button id="save-chat-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-2 sm:px-3 rounded transition-colors text-xs sm:text-sm" title="Save Chat as JSON">
+                    💾 <span class="hidden xs:inline">JSON</span>
+                </button>
+                <button id="export-md-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-2 sm:px-3 rounded transition-colors text-xs sm:text-sm" title="Export Chat as Markdown">
+                    📄 <span class="hidden xs:inline">MD</span>
                 </button>
             </div>
-            <label for="load-chat-input" class="cursor-pointer bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-3 rounded transition-colors text-sm" title="Load Chat">
-                📂 Load
+            <label for="load-chat-input" class="cursor-pointer bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-2 sm:px-3 rounded transition-colors text-xs sm:text-sm shrink-0" title="Load Chat">
+                📂 <span class="hidden xs:inline">Load</span>
             </label>
             <input type="file" id="load-chat-input" class="hidden" accept=".json">
-            <div class="flex items-center space-x-2 border-r border-gray-600 pr-4 mr-2">
-                <label for="context-size-input" class="text-sm text-gray-300">Context Size:</label>
-                <input type="number" id="context-size-input" class="bg-gray-700 text-white rounded p-2 text-sm w-24 focus:outline-none" min="1" placeholder="Auto">
+            <div class="flex items-center space-x-1 sm:space-x-2 border-r border-gray-600 pr-2 sm:pr-4 mr-1 sm:mr-2 shrink-0">
+                <label for="context-size-input" class="text-xs text-gray-300 hidden md:inline">Context:</label>
+                <input type="number" id="context-size-input" class="bg-gray-700 text-white rounded p-1 sm:p-2 text-xs sm:text-sm w-16 sm:w-24 focus:outline-none" min="1" placeholder="Auto">
             </div>
-            <select id="model-selector" class="bg-gray-700 text-white rounded p-2 text-sm focus:outline-none">
+            <select id="model-selector" class="bg-gray-700 text-white rounded p-1 sm:p-2 text-xs sm:text-sm focus:outline-none min-w-[120px] max-w-[150px] sm:max-w-none">
                 <option value="">Loading models...</option>
             </select>
-            <button id="load-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors text-sm">
+            <button id="load-btn" class="hidden sm:inline bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors text-sm shrink-0">
                 Load Model
             </button>
         </div>
@@ -212,6 +219,7 @@
         import { CreateMLCEngine, prebuiltAppConfig } from "https://esm.run/@mlc-ai/web-llm";
 
         const loadBtn = document.getElementById('load-btn');
+        const loadBtnMobile = document.getElementById('load-btn-mobile');
         const modelSelector = document.getElementById('model-selector');
         const progressContainer = document.getElementById('progress-container');
         const progressText = document.getElementById('progress-text');
@@ -280,7 +288,9 @@
                 return adapter;
             };
         } else {
-             addMessage("system", "Warning: WebGPU is not supported in this browser. You might need to use a compatible browser (e.g. Chrome, Edge) or enable it in flags.");
+             const gpuWarning = "⚠️ WebGPU is not supported in this browser. Mobile devices often require specific browsers (e.g., Chrome on Android) or enabling experimental flags. CPU mode still requires WebGPU support (via software fallback).";
+             addMessage("system", gpuWarning);
+             console.error(gpuWarning);
         }
 
         let messages = [
@@ -652,10 +662,11 @@
         });
         contextSizeInput.addEventListener('input', saveSettings);
 
-        loadBtn.addEventListener('click', async () => {
+        async function initiateModelLoad() {
             const selectedModel = modelSelector.value;
             saveSettings();
             loadBtn.disabled = true;
+            if (loadBtnMobile) loadBtnMobile.disabled = true;
             modelSelector.disabled = true;
             contextSizeInput.disabled = true;
             progressContainer.classList.remove('hidden');
@@ -690,10 +701,14 @@
                 progressBar.classList.replace('bg-blue-600', 'bg-red-600');
                 progressBar.style.width = '100%';
                 loadBtn.disabled = false;
+                if (loadBtnMobile) loadBtnMobile.disabled = false;
                 modelSelector.disabled = false;
                 contextSizeInput.disabled = false;
             }
-        });
+        }
+
+        loadBtn.addEventListener('click', initiateModelLoad);
+        if (loadBtnMobile) loadBtnMobile.addEventListener('click', initiateModelLoad);
 
         function addMessage(role, content, index = null) {
             const msgContainer = document.createElement('div');
