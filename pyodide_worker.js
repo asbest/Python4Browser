@@ -120,8 +120,11 @@ self.onmessage = async (e) => {
                             // Can print progress to python stdout
                             // console.log(progress);
                         };
+                        const cpuLabel = appSettings.useCPU ? " via WebGPU (CPU mode)" : " via WebGPU (High Performance)";
+                        console.log(`Loading LLM ${modelId}${cpuLabel}...`);
+
                         llmEngine = await webllm.CreateMLCEngine(modelId, { initProgressCallback });
-                        return "LLM successfully loaded!";
+                        return `LLM successfully loaded!${appSettings.useCPU ? " [CPU Mode]" : ""}`;
                     } catch (err) {
                         return "Error loading LLM: " + err.message;
                     }
