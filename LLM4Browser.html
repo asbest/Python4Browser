@@ -272,8 +272,15 @@
                 } else {
                     newOptions = Object.assign({}, options, { powerPreference: "high-performance" });
                 }
-                return originalRequestAdapter(newOptions);
+                let adapter = await originalRequestAdapter(newOptions);
+                if (!adapter && appSettings.useCPU) {
+                    console.warn("Fallback CPU adapter not found, trying low-power...");
+                    adapter = await originalRequestAdapter(Object.assign({}, options, { powerPreference: "low-power" }));
+                }
+                return adapter;
             };
+        } else {
+             addMessage("system", "Warning: WebGPU is not supported in this browser. You might need to use a compatible browser (e.g. Chrome, Edge) or enable it in flags.");
         }
 
         let messages = [

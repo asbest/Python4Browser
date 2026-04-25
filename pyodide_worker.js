@@ -2,16 +2,30 @@ importScripts('https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js');
 
 let pyodide;
 let llmEngine = null;
+let appSettings = {
+    useCPU: false
+};
 
-
-// Enforce High-Performance GPU if possible
-if (self.navigator && self.navigator.gpu) {
-    const originalRequestAdapter = self.navigator.gpu.requestAdapter.bind(self.navigator.gpu);
-    self.navigator.gpu.requestAdapter = async function(options) {
-        const newOptions = Object.assign({}, options, { powerPreference: "high-performance" });
-        return originalRequestAdapter(newOptions);
-    };
+function applyGpuPatch() {
+    if (self.navigator && self.navigator.gpu) {
+        const originalRequestAdapter = self.navigator.gpu.requestAdapter.bind(self.navigator.gpu);
+        self.navigator.gpu.requestAdapter = async function(options) {
+            let newOptions;
+            if (appSettings.useCPU) {
+                newOptions = Object.assign({}, options, { forceFallbackAdapter: true });
+            } else {
+                newOptions = Object.assign({}, options, { powerPreference: "high-performance" });
+            }
+            let adapter = await originalRequestAdapter(newOptions);
+            if (!adapter && appSettings.useCPU) {
+                adapter = await originalRequestAdapter(Object.assign({}, options, { powerPreference: "low-power" }));
+            }
+            return adapter;
+        };
+    }
 }
+
+applyGpuPatch();
 
 // Helper to dynamically load WebLLM from ES Module
 async function getWebLLM() {
@@ -24,6 +38,9 @@ self.onmessage = async (e) => {
     try {
         switch (type) {
             case 'init':
+                if (payload.useCPU !== undefined) {
+                    appSettings.useCPU = payload.useCPU;
+                }
                 pyodide = await loadPyodide();
 
                 // Mount IndexedDB
@@ -214,6 +231,11 @@ self.onmessage = async (e) => {
                     await micropip.install('${payload.packageName}')
                 `);
                 pyodide.pyimport(payload.packageName);
+                self.postMessage({ id, status: 'success' });
+                break;
+
+            case 'updateSettings':
+                appSettings = Object.assign(appSettings, payload);
                 self.postMessage({ id, status: 'success' });
                 break;
 

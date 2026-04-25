@@ -109,6 +109,10 @@
                 <button id="save-history-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded transition-colors w-full text-center block">
                     Download History
                 </button>
+                <div class="flex items-center space-x-2 pt-2 bg-gray-700 p-2 rounded">
+                    <input type="checkbox" id="use-cpu-input" class="w-4 h-4 text-blue-600 bg-gray-900 border-gray-700 rounded focus:ring-blue-500">
+                    <label for="use-cpu-input" class="text-sm text-gray-300">LLM: Use CPU (Slow)</label>
+                </div>
             </div>
 
             <!-- Package installation -->
@@ -186,6 +190,7 @@
         const toggleSidebarIcon = document.getElementById('toggle-sidebar-icon');
         const fileSidebar = document.getElementById('file-sidebar');
         const newFileBtn = document.getElementById('new-file-btn');
+        const useCPUInput = document.getElementById('use-cpu-input');
 
         // Editor Modal
         const editorModal = document.getElementById('editor-modal');
@@ -278,7 +283,14 @@
 
                 loadingStatus.textContent = 'Initializing Pyodide (Python Runtime) in worker...';
 
-                await runWorker('init');
+                const useCPU = localStorage.getItem('Python4BrowserUseCPU') === 'true';
+                useCPUInput.checked = useCPU;
+                useCPUInput.addEventListener('change', () => {
+                    localStorage.setItem('Python4BrowserUseCPU', useCPUInput.checked);
+                    runWorker('updateSettings', { useCPU: useCPUInput.checked });
+                });
+
+                await runWorker('init', { useCPU });
 
                 // 5. Hide loading indicator and show app
                 loadingIndicator.style.display = 'none';
