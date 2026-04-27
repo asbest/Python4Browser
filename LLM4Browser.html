@@ -958,12 +958,14 @@
                     actionBar.appendChild(editBtn);
                 }
 
-                if (role === 'assistant' && (index === messages.length - 1 || index === messages.length) && index !== null) {
+                if (role === 'assistant' && index !== null && (index === messages.length - 1 || (index === messages.length && messages[index-1]?.role === 'user'))) {
                     const regenBtn = document.createElement('button');
                     regenBtn.textContent = '🔄 Regenerate';
                     regenBtn.className = 'hover:text-white transition-colors';
                     regenBtn.onclick = () => {
-                        messages.pop(); // remove last assistant message
+                        if (messages.length > 0 && messages[messages.length - 1].role === 'assistant') {
+                            messages.pop(); // remove last assistant message
+                        }
                         msgContainer.remove(); // remove it from UI
                         saveChatSession();
                         handleSend(true); // trigger send again without new input
@@ -1036,6 +1038,8 @@
                 messages.push({ role: "assistant", content: replyText });
                 saveChatSession();
             } catch (err) {
+                messages.push({ role: "assistant", content: `Error: ${err.message}` });
+                saveChatSession();
                 if (err.message.includes("interrupt")) {
                     replyDiv.textContent += "\n\n*(Generation aborted)*";
                 } else {
