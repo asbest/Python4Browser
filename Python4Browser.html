@@ -111,9 +111,45 @@
                 <button id="save-history-btn" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded transition-colors w-full text-center block">
                     Download History
                 </button>
-                <div class="flex items-center space-x-2 pt-2 bg-gray-700 p-2 rounded">
+            </div>
+
+            <!-- LLM Settings -->
+            <h3 class="text-md font-semibold text-gray-300 mt-4 mb-2">LLM Settings</h3>
+            <div class="space-y-3 bg-gray-700 p-3 rounded-md">
+                <div class="flex items-center justify-between">
+                    <label for="use-cpu-input" class="text-xs text-gray-300">Use CPU (WebLLM)</label>
                     <input type="checkbox" id="use-cpu-input" class="w-4 h-4 text-blue-600 bg-gray-900 border-gray-700 rounded focus:ring-blue-500">
-                    <label for="use-cpu-input" class="text-sm text-gray-300">LLM: Use CPU (Slow)</label>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-300 mb-1">Backend</label>
+                    <select id="backend-selector" class="w-full bg-gray-900 border border-gray-700 rounded p-1 text-xs text-white focus:outline-none">
+                        <option value="webllm">WebLLM (WebGPU)</option>
+                        <option value="transformers">Transformers.js (CPU)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-300 mb-1">Context Length</label>
+                    <input type="number" id="context-size-input" placeholder="Auto" class="w-full bg-gray-900 border border-gray-700 rounded p-1 text-xs text-white focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-300 mb-1">Temperature (<span id="temp-val">0.7</span>)</label>
+                    <input type="range" id="temp-input" min="0" max="2" step="0.1" value="0.7" class="w-full h-2 bg-gray-800 rounded-lg appearance-none cursor-pointer">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-300 mb-1">Top-P (<span id="top-p-val">1.0</span>)</label>
+                    <input type="range" id="top-p-input" min="0" max="1" step="0.05" value="1.0" class="w-full h-2 bg-gray-800 rounded-lg appearance-none cursor-pointer">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-300 mb-1">Repetition Penalty (<span id="rep-pen-val">1.0</span>)</label>
+                    <input type="range" id="rep-pen-input" min="1" max="2" step="0.05" value="1.0" class="w-full h-2 bg-gray-800 rounded-lg appearance-none cursor-pointer">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-300 mb-1">Max Tokens</label>
+                    <input type="number" id="max-tokens-input" value="1024" class="w-full bg-gray-900 border border-gray-700 rounded p-1 text-xs text-white focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-300 mb-1">System Prompt</label>
+                    <textarea id="sys-prompt-input" rows="2" class="w-full bg-gray-900 border border-gray-700 rounded p-1 text-xs text-white focus:outline-none resize-none">You are a helpful AI assistant.</textarea>
                 </div>
             </div>
 
@@ -193,6 +229,16 @@
         const fileSidebar = document.getElementById('file-sidebar');
         const newFileBtn = document.getElementById('new-file-btn');
         const useCPUInput = document.getElementById('use-cpu-input');
+        const backendSelector = document.getElementById('backend-selector');
+        const contextSizeInput = document.getElementById('context-size-input');
+        const tempInput = document.getElementById('temp-input');
+        const tempVal = document.getElementById('temp-val');
+        const topPInput = document.getElementById('top-p-input');
+        const topPVal = document.getElementById('top-p-val');
+        const repPenInput = document.getElementById('rep-pen-input');
+        const repPenVal = document.getElementById('rep-pen-val');
+        const maxTokensInput = document.getElementById('max-tokens-input');
+        const sysPromptInput = document.getElementById('sys-prompt-input');
 
         // Editor Modal
         const editorModal = document.getElementById('editor-modal');
@@ -285,14 +331,59 @@
 
                 loadingStatus.textContent = 'Initializing Pyodide (Python Runtime) in worker...';
 
-                const useCPU = localStorage.getItem('Python4BrowserUseCPU') === 'true';
-                useCPUInput.checked = useCPU;
-                useCPUInput.addEventListener('change', () => {
-                    localStorage.setItem('Python4BrowserUseCPU', useCPUInput.checked);
-                    runWorker('updateSettings', { useCPU: useCPUInput.checked });
+                // LLM Settings synchronization
+                const defaultSettings = {
+                    useCPU: false,
+                    backend: 'webllm',
+                    contextWindowSize: null,
+                    temperature: 0.7,
+                    top_p: 1.0,
+                    max_tokens: 1024,
+                    repetition_penalty: 1.0,
+                    systemPrompt: "You are a helpful AI assistant."
+                };
+
+                let settings = JSON.parse(localStorage.getItem('Python4BrowserLLMSettings')) || defaultSettings;
+
+                function updateUIFromSettings() {
+                    useCPUInput.checked = settings.useCPU;
+                    backendSelector.value = settings.backend;
+                    contextSizeInput.value = settings.contextWindowSize || '';
+                    tempInput.value = settings.temperature;
+                    tempVal.textContent = settings.temperature;
+                    topPInput.value = settings.top_p;
+                    topPVal.textContent = settings.top_p;
+                    repPenInput.value = settings.repetition_penalty;
+                    repPenVal.textContent = settings.repetition_penalty;
+                    maxTokensInput.value = settings.max_tokens;
+                    sysPromptInput.value = settings.systemPrompt;
+                }
+
+                function saveSettings() {
+                    settings.useCPU = useCPUInput.checked;
+                    settings.backend = backendSelector.value;
+                    settings.contextWindowSize = contextSizeInput.value ? parseInt(contextSizeInput.value) : null;
+                    settings.temperature = parseFloat(tempInput.value);
+                    settings.top_p = parseFloat(topPInput.value);
+                    settings.repetition_penalty = parseFloat(repPenInput.value);
+                    settings.max_tokens = parseInt(maxTokensInput.value);
+                    settings.systemPrompt = sysPromptInput.value;
+
+                    localStorage.setItem('Python4BrowserLLMSettings', JSON.stringify(settings));
+                    runWorker('updateSettings', settings);
+                }
+
+                updateUIFromSettings();
+
+                [useCPUInput, backendSelector, contextSizeInput, tempInput, topPInput, repPenInput, maxTokensInput, sysPromptInput].forEach(el => {
+                    el.addEventListener('change', saveSettings);
                 });
 
-                await runWorker('init', { useCPU });
+                tempInput.addEventListener('input', () => tempVal.textContent = tempInput.value);
+                topPInput.addEventListener('input', () => topPVal.textContent = topPInput.value);
+                repPenInput.addEventListener('input', () => repPenVal.textContent = repPenInput.value);
+
+                await runWorker('init', settings);
 
                 // 5. Hide loading indicator and show app
                 loadingIndicator.style.display = 'none';

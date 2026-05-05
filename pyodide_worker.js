@@ -3,7 +3,14 @@ importScripts('https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js');
 let pyodide;
 let llmEngine = null;
 let appSettings = {
-    useCPU: false
+    useCPU: false,
+    backend: 'webllm',
+    contextWindowSize: null,
+    temperature: 0.7,
+    top_p: 1.0,
+    max_tokens: 1024,
+    repetition_penalty: 1.0,
+    systemPrompt: "You are a helpful AI assistant."
 };
 
 function applyGpuPatch() {
@@ -113,16 +120,19 @@ self.onmessage = async (e) => {
                     print("Pyodide initialized.")
                     print(f"Python version: {sys.version.split(' ')[0]}")
                     print("Available libraries: pandas (pd), numpy (np), networkx (nx), matplotlib.pyplot (plt)")
-                    print("Added 'browser_llm' to access local LLM. Try: import browser_llm; browser_llm.chat('Hello')")
+                    print("Added 'browser_llm' to access local LLM.")
+                    print("Example: import browser_llm; await browser_llm.load_model(backend='transformers'); await browser_llm.chat('Hello', temperature=0.1)")
                     print("Use the 'Upload Files' button to make local files available.")
                     print("--------------------------------------------------")
                 `);
 
                 // Expose JS functions directly to the global worker scope so 'import js' can access them
-                self._js_load_llm = async (modelId, backend = "webllm") => {
+                self._js_load_llm = async (modelId, backend, contextWindowSize) => {
                     if (llmEngine) {
                         return "Model already loaded.";
                     }
+                    backend = backend || appSettings.backend;
+                    contextWindowSize = contextWindowSize || appSettings.contextWindowSize;
                     try {
                         if (backend === "webllm") {
                             const webllm = await getWebLLM();
@@ -133,7 +143,12 @@ self.onmessage = async (e) => {
                             const cpuLabel = appSettings.useCPU ? " via WebGPU (CPU mode)" : " via WebGPU (High Performance)";
                             console.log(`Loading LLM ${modelId}${cpuLabel}...`);
 
-                            llmEngine = await webllm.CreateMLCEngine(modelId, { initProgressCallback });
+                            const chatOpts = {};
+                            if (contextWindowSize) {
+                                chatOpts.context_window_size = parseInt(contextWindowSize);
+                            }
+
+                            llmEngine = await webllm.CreateMLCEngine(modelId, { initProgressCallback }, chatOpts);
                             llmEngine._backend = "webllm";
                             return `LLM successfully loaded!${appSettings.useCPU ? " [CPU Mode]" : ""}`;
                         } else {
@@ -154,8 +169,10 @@ self.onmessage = async (e) => {
                                             });
                                             const output = await pipe(inputs, {
                                                 max_new_tokens: options.max_tokens || 1024,
-                                                do_sample: true,
-                                                temperature: 0.7,
+                                                do_sample: options.temperature > 0,
+                                                temperature: options.temperature !== undefined ? options.temperature : 0.7,
+                                                repetition_penalty: options.repetition_penalty || 1.0,
+                                                top_p: options.top_p || 1.0,
                                                 return_full_text: false,
                                             });
                                             return {
@@ -174,33 +191,45 @@ self.onmessage = async (e) => {
                     }
                 };
 
-                self._js_ask_llm = async (prompt) => {
+                self._js_ask_llm = async (prompt, options = {}) => {
                     if (!llmEngine) {
                         throw new Error("LLM is not loaded. Call load_model() first.");
                     }
-                    const messages = [{ role: "user", content: prompt }];
-                    const reply = await llmEngine.chat.completions.create({ messages });
-                    if (llmEngine._backend === "webllm") {
-                        return reply.choices[0].message.content;
-                    } else {
-                        return reply.choices[0].message.content;
+                    const messages = [];
+                    const sysPrompt = options.systemPrompt || appSettings.systemPrompt;
+                    if (sysPrompt) {
+                        messages.push({ role: "system", content: sysPrompt });
                     }
+                    messages.push({ role: "user", content: prompt });
+
+                    const chatOpts = Object.assign({
+                        messages,
+                        temperature: appSettings.temperature,
+                        top_p: appSettings.top_p,
+                        max_tokens: appSettings.max_tokens,
+                        repetition_penalty: appSettings.repetition_penalty
+                    }, options);
+
+                    const reply = await llmEngine.chat.completions.create(chatOpts);
+                    return reply.choices[0].message.content;
                 };
 
                 await pyodide.runPythonAsync(`
                     import browser_llm
                     import asyncio
 
-                    async def async_load(model_id="Llama-3.2-1B-Instruct-q4f16_1-MLC", backend="webllm"):
+                    async def async_load(model_id="Llama-3.2-1B-Instruct-q4f16_1-MLC", backend=None, context_window_size=None):
                         import js
-                        print(f"Loading {model_id} ({backend})...")
-                        result = await js._js_load_llm(model_id, backend)
+                        print(f"Loading {model_id}...")
+                        result = await js._js_load_llm(model_id, backend, context_window_size)
                         print(result)
 
-                    async def async_chat(prompt):
+                    async def async_chat(prompt, **kwargs):
                         import js
+                        from pyodide.ffi import to_js
                         try:
-                            result = await js._js_ask_llm(prompt)
+                            options = to_js(kwargs, dict_converter=js.Object.fromEntries)
+                            result = await js._js_ask_llm(prompt, options)
                             return result
                         except Exception as e:
                             print(e)
