@@ -114,8 +114,13 @@
             </div>
 
             <!-- LLM Settings -->
-            <h3 class="text-md font-semibold text-gray-300 mt-4 mb-2">LLM Settings</h3>
-            <div class="space-y-3 bg-gray-700 p-3 rounded-md">
+            <div class="flex justify-between items-center mt-4 mb-2 cursor-pointer group" id="llm-settings-toggle">
+                <h3 class="text-md font-semibold text-gray-300 group-hover:text-white">LLM Settings</h3>
+                <svg id="llm-settings-icon" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 group-hover:text-white transform transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+            </div>
+            <div id="llm-settings-container" class="space-y-3 bg-gray-700 p-3 rounded-md hidden">
                 <div class="flex items-center justify-between">
                     <label for="use-cpu-input" class="text-xs text-gray-300">Use CPU (WebLLM)</label>
                     <input type="checkbox" id="use-cpu-input" class="w-4 h-4 text-blue-600 bg-gray-900 border-gray-700 rounded focus:ring-blue-500">
@@ -239,6 +244,9 @@
         const repPenVal = document.getElementById('rep-pen-val');
         const maxTokensInput = document.getElementById('max-tokens-input');
         const sysPromptInput = document.getElementById('sys-prompt-input');
+        const llmSettingsToggle = document.getElementById('llm-settings-toggle');
+        const llmSettingsContainer = document.getElementById('llm-settings-container');
+        const llmSettingsIcon = document.getElementById('llm-settings-icon');
 
         // Editor Modal
         const editorModal = document.getElementById('editor-modal');
@@ -822,7 +830,13 @@
             } else {
                 // Show content
                 title.classList.remove('hidden');
-                content.forEach(el => el.classList.remove('hidden'));
+                content.forEach(el => {
+                    // Don't show LLM settings if it was collapsed
+                    if (el.id === 'llm-settings-container' && llmSettingsContainer.classList.contains('hidden')) {
+                        return;
+                    }
+                    el.classList.remove('hidden');
+                });
 
                 // Expand sidebar
                 fileSidebar.style.setProperty('--sidebar-width', lastSidebarWidth);
@@ -836,6 +850,11 @@
         }
 
         toggleSidebarBtn.addEventListener('click', toggleSidebar);
+
+        llmSettingsToggle.addEventListener('click', () => {
+            const isHidden = llmSettingsContainer.classList.toggle('hidden');
+            llmSettingsIcon.classList.toggle('rotate-180', !isHidden);
+        });
     </script>
 </body>
 </html>
