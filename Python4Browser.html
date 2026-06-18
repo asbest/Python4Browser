@@ -125,6 +125,10 @@
                     <label for="use-cpu-input" class="text-xs text-gray-300">Use CPU (WebLLM)</label>
                     <input type="checkbox" id="use-cpu-input" class="w-4 h-4 text-blue-600 bg-gray-900 border-gray-700 rounded focus:ring-blue-500">
                 </div>
+                <div id="npu-settings-group" class="flex items-center justify-between hidden">
+                    <label for="use-npu-input" class="text-xs text-gray-300">Use NPU (WebNN)</label>
+                    <input type="checkbox" id="use-npu-input" class="w-4 h-4 text-green-600 bg-gray-900 border-gray-700 rounded focus:ring-green-500">
+                </div>
                 <div>
                     <label class="block text-xs text-gray-300 mb-1">Backend</label>
                     <select id="backend-selector" class="w-full bg-gray-900 border border-gray-700 rounded p-1 text-xs text-white focus:outline-none">
@@ -234,6 +238,8 @@
         const fileSidebar = document.getElementById('file-sidebar');
         const newFileBtn = document.getElementById('new-file-btn');
         const useCPUInput = document.getElementById('use-cpu-input');
+        const useNPUInput = document.getElementById('use-npu-input');
+        const npuSettingsGroup = document.getElementById('npu-settings-group');
         const backendSelector = document.getElementById('backend-selector');
         const contextSizeInput = document.getElementById('context-size-input');
         const tempInput = document.getElementById('temp-input');
@@ -312,6 +318,23 @@
 
         async function main() {
             try {
+                let npuAvailable = false;
+                async function checkNPU() {
+                    if (navigator.ml) {
+                        try {
+                            const context = await navigator.ml.createContext({ deviceType: 'npu' });
+                            if (context) {
+                                npuAvailable = true;
+                                if (npuSettingsGroup) npuSettingsGroup.classList.remove('hidden');
+                                addToOutput("🚀 NPU hardware acceleration detected! You can enable it in LLM Settings.", 'system');
+                            }
+                        } catch (e) {
+                            console.log("NPU not available:", e.message);
+                        }
+                    }
+                }
+                checkNPU();
+
                 pyodideWorker = new Worker("pyodide_worker.js");
                 pyodideWorker.onmessage = (e) => {
                     if (e.data.id !== undefined && workerCallbacks[e.data.id]) {
@@ -342,6 +365,7 @@
                 // LLM Settings synchronization
                 const defaultSettings = {
                     useCPU: false,
+                    useNPU: false,
                     backend: 'webllm',
                     contextWindowSize: null,
                     temperature: 0.7,
@@ -355,6 +379,7 @@
 
                 function updateUIFromSettings() {
                     useCPUInput.checked = settings.useCPU;
+                    useNPUInput.checked = !!settings.useNPU;
                     backendSelector.value = settings.backend;
                     contextSizeInput.value = settings.contextWindowSize || '';
                     tempInput.value = settings.temperature;
@@ -369,6 +394,7 @@
 
                 function saveSettings() {
                     settings.useCPU = useCPUInput.checked;
+                    settings.useNPU = useNPUInput.checked;
                     settings.backend = backendSelector.value;
                     settings.contextWindowSize = contextSizeInput.value ? parseInt(contextSizeInput.value) : null;
                     settings.temperature = parseFloat(tempInput.value);
@@ -383,7 +409,7 @@
 
                 updateUIFromSettings();
 
-                [useCPUInput, backendSelector, contextSizeInput, tempInput, topPInput, repPenInput, maxTokensInput, sysPromptInput].forEach(el => {
+                [useCPUInput, useNPUInput, backendSelector, contextSizeInput, tempInput, topPInput, repPenInput, maxTokensInput, sysPromptInput].forEach(el => {
                     el.addEventListener('change', saveSettings);
                 });
 

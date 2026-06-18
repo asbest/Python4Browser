@@ -179,6 +179,10 @@
                             <input type="checkbox" id="use-cpu-input" class="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500">
                             <label for="use-cpu-input" class="text-xs sm:text-sm text-gray-300">Use CPU (WebLLM only)</label>
                         </div>
+                        <div id="npu-settings-group" class="flex items-center space-x-2 pb-2 hidden">
+                            <input type="checkbox" id="use-npu-input" class="w-4 h-4 text-green-600 bg-gray-700 border-gray-600 rounded focus:ring-green-500">
+                            <label for="use-npu-input" class="text-xs sm:text-sm text-gray-300">Use NPU (WebNN - Transformers.js only)</label>
+                        </div>
                     </div>
                 </div>
                 <div class="mt-4 sm:mt-6 flex justify-end">
@@ -289,6 +293,8 @@
         const repPenVal = document.getElementById('rep-pen-val');
         const maxTokensInput = document.getElementById('max-tokens-input');
         const useCPUInput = document.getElementById('use-cpu-input');
+        const useNPUInput = document.getElementById('use-npu-input');
+        const npuSettingsGroup = document.getElementById('npu-settings-group');
         const backendSelector = document.getElementById('backend-selector');
 
         class TransformersEngine {
@@ -386,6 +392,7 @@
             selectedModel: null,
             contextSize: null,
             useCPU: false,
+            useNPU: false,
             backend: 'webllm'
         };
 
@@ -393,6 +400,25 @@
         let attachedFileName = null;
         let currentChatId = Date.now().toString();
         let attachedFileContent = null;
+        let npuAvailable = false;
+
+        async function checkNPU() {
+            if (navigator.ml) {
+                try {
+                    const context = await navigator.ml.createContext({ deviceType: 'npu' });
+                    if (context) {
+                        npuAvailable = true;
+                        console.log("NPU detected via WebNN.");
+                        addMessage("system", "🚀 NPU hardware acceleration detected! You can enable it in Settings for supported models.");
+                        if (npuSettingsGroup) npuSettingsGroup.classList.remove('hidden');
+                    }
+                } catch (e) {
+                    console.log("NPU not available or WebNN not fully supported:", e.message);
+                }
+            }
+        }
+        checkNPU();
+
         // Enforce High-Performance GPU if possible or Fallback CPU
         if (navigator.gpu) {
             const originalRequestAdapter = navigator.gpu.requestAdapter.bind(navigator.gpu);
@@ -591,6 +617,7 @@
             appSettings.selectedModel = modelSelector.value;
             appSettings.contextSize = contextSizeInput.value ? parseInt(contextSizeInput.value) : null;
             appSettings.useCPU = useCPUInput.checked;
+            appSettings.useNPU = useNPUInput.checked;
             appSettings.backend = backendSelector.value;
             localStorage.setItem('LLM4BrowserSettings', JSON.stringify(appSettings));
 
@@ -610,6 +637,7 @@
             repPenVal.textContent = appSettings.repetition_penalty.toFixed(2);
             maxTokensInput.value = appSettings.max_tokens || '';
             useCPUInput.checked = !!appSettings.useCPU;
+            useNPUInput.checked = !!appSettings.useNPU;
             backendSelector.value = appSettings.backend || 'webllm';
             settingsModal.classList.remove('hidden');
         });
@@ -910,15 +938,28 @@
                     }
                     engine = await CreateMLCEngine(selectedModel, { initProgressCallback }, chatOpts);
                 } else {
-                    const pipe = await pipeline('text-generation', selectedModel, {
-                        device: 'wasm',
+                    const pipeOptions = {
                         progress_callback: initProgressCallback
-                    });
+                    };
+                    if (appSettings.useNPU && npuAvailable) {
+                        pipeOptions.device = 'webnn';
+                        // deviceType 'npu' is usually implied when selecting webnn if NPU is available,
+                        // but some implementations might allow explicit selection in the session options
+                        // For now we follow the 'webnn' device string which is the primary way to trigger WebNN in T.js v3
+                    } else {
+                        pipeOptions.device = 'wasm';
+                    }
+                    const pipe = await pipeline('text-generation', selectedModel, pipeOptions);
                     engine = new TransformersEngine(selectedModel, pipe);
                 }
 
                 progressContainer.classList.add('hidden');
-                const cpuLabel = (appSettings.useCPU || backend === 'transformers') ? " (CPU)" : "";
+                let cpuLabel = "";
+                if (backend === 'transformers') {
+                    cpuLabel = (appSettings.useNPU && npuAvailable) ? " (NPU/WebNN)" : " (CPU)";
+                } else {
+                    cpuLabel = appSettings.useCPU ? " (CPU)" : "";
+                }
                 addMessage("system", `Model ${selectedModel}${cpuLabel} loaded successfully! You can now chat.`);
                 userInput.disabled = false;
                 sendBtn.disabled = false;
