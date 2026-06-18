@@ -4,6 +4,7 @@ let pyodide;
 let llmEngine = null;
 let appSettings = {
     useCPU: false,
+    useNPU: false,
     backend: 'webllm',
     contextWindowSize: null,
     temperature: 0.7,
@@ -12,6 +13,22 @@ let appSettings = {
     repetition_penalty: 1.0,
     systemPrompt: "You are a helpful AI assistant."
 };
+
+let npuAvailable = false;
+async function checkNPU() {
+    if (self.navigator && self.navigator.ml) {
+        try {
+            const context = await self.navigator.ml.createContext({ deviceType: 'npu' });
+            if (context) {
+                npuAvailable = true;
+                console.log("Worker: NPU detected via WebNN.");
+            }
+        } catch (e) {
+            console.log("Worker: NPU not available:", e.message);
+        }
+    }
+}
+checkNPU();
 
 function applyGpuPatch() {
     if (self.navigator && self.navigator.gpu) {
@@ -153,10 +170,16 @@ self.onmessage = async (e) => {
                             return `LLM successfully loaded!${appSettings.useCPU ? " [CPU Mode]" : ""}`;
                         } else {
                             const { pipeline } = await getTransformers();
-                            console.log(`Loading Transformers.js model ${modelId} (CPU/WASM)...`);
-                            const pipe = await pipeline('text-generation', modelId, {
-                                device: 'wasm'
-                            });
+                            const pipeOptions = {};
+                            let modeLabel = "(CPU/WASM)";
+                            if (appSettings.useNPU && npuAvailable) {
+                                pipeOptions.device = 'webnn';
+                                modeLabel = "(NPU/WebNN)";
+                            } else {
+                                pipeOptions.device = 'wasm';
+                            }
+                            console.log(`Loading Transformers.js model ${modelId} ${modeLabel}...`);
+                            const pipe = await pipeline('text-generation', modelId, pipeOptions);
                             llmEngine = {
                                 _pipe: pipe,
                                 _backend: "transformers",

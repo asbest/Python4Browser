@@ -1,2 +1,1 @@
-127.0.0.1 - - [05/May/2026 09:47:31] "GET /Python4Browser.html HTTP/1.1" 200 -
-127.0.0.1 - - [05/May/2026 09:47:33] "GET /pyodide_worker.js HTTP/1.1" 200 -
+127.0.0.1 - - [18/Jun/2026 14:04:20] "GET /LLM4Browser.html?mockNPU=1 HTTP/1.1" 200 -
